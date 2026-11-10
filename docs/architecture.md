@@ -70,6 +70,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - Equation은 사전 렌더된 MathJax SVG를 정화해 삽입합니다.
 - Image는 `data:` URI만 허용하고, 인라인 SVG는 script·이벤트 속성을 제거합니다.
 - 패스스루 속성은 허용 목록으로 거르고 모든 문자열을 이스케이프합니다.
+- 스코프 본문은 `overflow="hidden"`인 중첩 `<svg>` 뷰포트(캔버스 크기)로 감싸 도해가 스코프 밖으로 새지 않게 합니다. `url(#…)` 클립을 쓰지 않아 순수 벡터·결정성이 유지됩니다.
 
 ## 6. 투영 핸들
 

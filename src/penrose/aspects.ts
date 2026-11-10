@@ -87,7 +87,10 @@ export function scopeSpec(panels: NonNullable<AspectSpec<PenroseScopeAspect, Sco
       if (!layout) return { ...box, pending: true };
       const frame = frameFor(layout.canvas, box);
       const body = renderScene(layout.shapes, { canvas: layout.canvas, labels: layout.labels, idPrefix: id });
-      return { ...box, svg: `<g transform="${frameTransform(frame)}" data-penrose-scope="${escapeText(id)}">${body}</g>` };
+      // A nested <svg> viewport clips to the diagram canvas without url(#…)
+      // references, so screen and export stay pure vector and deterministic.
+      const clipped = `<svg x="0" y="0" width="${layout.canvas.width}" height="${layout.canvas.height}" overflow="hidden">${body}</svg>`;
+      return { ...box, svg: `<g transform="${frameTransform(frame)}" data-penrose-scope="${escapeText(id)}">${clipped}</g>` };
     },
     renderSvg(_props, derived) {
       if (!derived) return { svg: '' };

@@ -22,6 +22,9 @@ suite('headless SVG determinism (real SceneVectorCompiler)', () => {
     // Equation labels are MathJax path glyphs, not DOM nodes.
     expect(svg).toContain('<path');
     expect(svg).toMatch(/Penrose × alid/);
+    // Diagram content is clipped to the Penrose canvas viewport, without url().
+    expect(svg).toContain('overflow="hidden"');
+    expect(svg).not.toMatch(/url\(/);
   });
 
   it('escapes document strings', async () => {

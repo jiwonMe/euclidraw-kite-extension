@@ -765,10 +765,10 @@ function Me(e) {
 				canvas: a.canvas,
 				labels: a.labels,
 				idPrefix: t
-			});
+			}), c = `<svg x="0" y="0" width="${a.canvas.width}" height="${a.canvas.height}" overflow="hidden">${s}</svg>`;
 			return {
 				...r,
-				svg: `<g transform="${ne(o)}" data-penrose-scope="${je(t)}">${s}</g>`
+				svg: `<g transform="${ne(o)}" data-penrose-scope="${je(t)}">${c}</g>`
 			};
 		},
 		renderSvg(e, t) {
