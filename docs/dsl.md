@@ -1,83 +1,37 @@
-# Kite Tri-DSL 레퍼런스
+# DSL — Penrose trio
 
-한 스코프는 세 텍스트로 정의됩니다. 주석은 `#`(행 처음 또는 공백 뒤, `#hex` 색상 제외) 또는 `//`입니다.
+이 확장은 자체 DSL이 없습니다. 세 프로그램을 그대로 `@penrose/core`에 넘깁니다.
 
-| DSL | 담당 |
+- 공식 참조: <https://penrose.cs.cmu.edu/docs/ref>
+- 예제 레지스트리: <https://penrose.cs.cmu.edu/examples>
+
+## 스코프 필드와의 대응
+
+| 필드 | 대응 |
 |---|---|
-| Domain | 타입, 술어, 생성자 |
-| Substance | 개체 선언과 논리적 구속 |
-| Style | 시각 매핑, `param`, 소프트 구속 컴플라이언스 |
+| `domainDsl` | Domain 프로그램 |
+| `substanceDsl` | Substance 프로그램 |
+| `styleDsl` | Style 프로그램 |
+| `variation` | 초기 표본 시드. `resample` 명령이 1씩 올립니다. |
+| `topologyDigest` | trio·variation·엔진 버전·측정 정책의 해시 |
+| `varyingValues` | 마지막 최적화 입력 벡터 (Cold 열기용) |
+| `pins` | 사용자가 고정한 입력 인덱스와 값 |
 
-수식(좌표, 반지름, 거리, 스타일 값)은 `+ - * / ^`, 괄호, `sin cos tan sqrt abs deg rad min max pow`, `pi`, Style `param` 이름을 쓸 수 있고, 연료 제한 Wasm VM에서 평가됩니다. `deg(x)`/`rad(x)`는 모두 도→라디안입니다.
+## 이 구현에서 확인된 것
 
-## Domain
+기본 예제와 테스트가 실제로 쓰는 범위입니다.
 
-```text
-type Point shape point
-type Segment shape segment
-type Diameter extends Segment        # 상위 타입의 shape 상속
-predicate On(Point, Circle) = OnCircle   # 기본 술어에 별칭 + 인자 타입 제한
-predicate Tangent(Line, Circle)          # 이름이 기본 술어면 '=' 생략
-constructor MidpointOf(Point, Point) -> Point = Midpoint
-constructor PointOn(Circle) -> Point = OnCircle
-```
+- `canvas { width = … height = … }`
+- `forall Type x { … }`, 이름 선택자 `forall Point A { … }`
+- 셰이프: `Circle`, `Ellipse`, `Line`, `Polygon`, `Polyline`, `Rectangle`, `Path`, `Text`, `Equation`, `Image`, `Group`
+- 레이블: `Text`(고정 문자열), `Equation`(TeX). `AutoLabel`은 이 빌드에서 검증하지 않았습니다.
+- `fillColor`, `strokeColor`, `strokeWidth`, `strokeStyle`, `strokeDasharray`, `strokeLinecap`, `opacity` 등 표준 속성.
+- `ensure`/`encourage`, `layout` 단계, `override`/`delete`, `collect`는 core가 그대로 처리합니다(이 저장소의 테스트 범위 밖).
 
-- shape: `point segment line ray circle arc polygon angle-mark label-anchor`.
-- 기본 술어: `Distance(P, P, n)`, `Coincident(P, P)`, `Midpoint(M, A, B)`, `OnCircle(P, c)`, `OnLine(P, l)`, `Perpendicular(l, l)`, `Parallel(l, l)`, `EqualLength(l, l)`, `Horizontal(l)`, `Vertical(l)`, `Tangent(l, c)`, `Radius(c, n)`, `AngleAt(V, A, B, deg)`, `Fixed(P)`. 선 인자는 segment·line·ray를 받습니다.
-- `constructor`가 만든 개체는 기본 술어의 **첫 인자**가 되므로 입력은 (기본 술어 인자 수 − 1)개입니다.
-- 술어 인자 타입은 미니버퍼 후보와 Space 2B 버튼에도 적용됩니다.
+## 알려진 제약
 
-## Substance
-
-### 개체
-
-```text
-canvas 520 380                          # 로컬 좌표계 크기(기본 520×380)
-Point A = (120, 260) pin                # pin: 고정
-Point F                                 # 좌표 생략: 솔버가 배치
-Point O = MidpointOf(A, B)              # 생성자
-Segment AB = A .. B                     # Line, Ray도 같은 형식
-Circle c = center O through A           # 또는 center O r 100, 또는 center O
-Arc a = center O r 40 from 200 to 340   # 도 단위
-Polygon tri = A P B
-Angle angP = A P B                      # 가운데가 꼭짓점; 90°면 직각 표시
-Label l1 = "c" at center c normal 8
-Label l2 = "AB" at midpoint AB offset (0, -14)
-Label l3 = "∠APB = 90°" at bisector angP card
-pin X / unpin X
-```
-
-라벨 앵커: `point P`, `center c|arc|polygon`, `midpoint 선`, `bisector 각`. 오프셋: `normal d`(앵커 법선 방향 거리) 또는 `offset (x, y)`. `card`는 `markdown.card` 멤버(수식 지원)로 만들며, 해당 확장이 없으면 SVG 텍스트로 그립니다.
-
-### 구속
-
-```text
-Perpendicular(AP, PB)
-soft EqualLength(AP, PB)     # 소프트: 컴플라이언스만큼 양보
-Distance(A, Q, 120 * k)
-On(Q, c)                     # Domain 별칭
-```
-
-## Style
-
-```text
-param k = 1 range(0.5, 3) step 0.1   # DialKit 슬라이더
-point { r: 4.5 * k; fill: #2563eb; stroke: #ffffff; width: 1.5 }
-segment, line, ray { stroke: #475569; width: 2 }
-A, B { label: true }                 # 개체 이름 선택자
-Point { ... }                        # Domain 타입 선택자
-OQ { dash: 4 }
-labThales { cardWidth: 128; cardHeight: 40 }
-@soft { compliance: 0.002 }          # 모든 soft 구속
-@EqualLength { compliance: 0.01 }    # 특정 술어
-```
-
-선택자 우선순위는 뒤에 오는 규칙이 이깁니다(shape → 타입 → id 순서가 아니라 선언 순서). 주요 속성: `r fill stroke width dash fillOpacity label labelColor labelBackground fontSize fontWeight radius square ticks arrows cardWidth cardHeight compliance`. 값은 문자열(`"..."`), `true/false`, 색상(`#hex`, 이름), 수식입니다.
-
-## 진단
-
-오류는 `{source, line, message}`로 Tri-DSL 편집기 줄에 표시됩니다. 오류가 있으면 적용을 거부하고, 원격 피어가 쓴 깨진 DSL은 스코프 위치에 오류 배지로 보입니다(멤버 기하는 숨김).
-
-## 예제
-
-새 스코프의 기본값은 [src/defaults.ts](../src/defaults.ts)의 탈레스 정리 예제입니다.
+- `draggingConstraint`는 지원하지 않습니다. JS 함수 본문 문자열이라 호스트의 "문서 코드 실행 금지" 원칙과 충돌합니다.
+- `Image`의 `href`는 `data:` URI만 렌더합니다. 외부 URL은 무시됩니다.
+- `Path`의 SVG 명령은 좌표계 변환 후 그대로 출력합니다. `Group`은 클립을 지원하지만 기즈모는 없습니다.
+- `Text`는 고정 메트릭 표로 측정합니다. 플랫폼 폰트와 폭이 미세하게 다를 수 있습니다.
+- 실패한 컴파일은 스코프 위에 오류 배지로 표시되고, 정본에는 마지막으로 적용된 DSL이 남습니다.

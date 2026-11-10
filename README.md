@@ -1,94 +1,110 @@
-# EucliDraw Kite Studio 확장 (`jiwonme/euclidraw-kite-extension`)
+# Penrose Studio (`penrose.studio`)
 
-alid(EucliDraw) 캔버스용 **Kite Studio** 확장(`kite.studio` 0.2.0)입니다. Domain · Substance · Style 세 DSL로 기하 도해를 선언하면, 확장이 직접 가진 **Wasm SIMD 솔버**(`crate-kite-solver`)가 구속 다양체 위로 정사영해 배치합니다. 점 · 선분 · 직선 · 반직선 · 원 · 호 · 다각형 · 각도 표시 · 라벨이 각각 **일급 캔버스 엔티티**(PRD의 패턴 A 서브그래프)라서 선택, 연결선, 클립보드, SVG 내보내기가 다른 도형처럼 동작합니다.
+alid(EucliDraw) 캔버스에서 **Penrose** 도해를 그리고, 자유도가 있는 객체를 기즈모로 직접 움직이는 확장입니다. Penrose의 Domain · Substance · Style trio를 그대로 쓰고, `@penrose/core` 3.3.1(MIT)을 이 확장의 Worker 안에 내장합니다.
 
-- 커널과 Rust 코어는 바꾸지 않습니다. 모든 기능은 공개 확장 계약으로 들어갑니다.
-- 소스는 TypeScript와 Rust입니다. 배포물은 하나의 ESM(`dist/plugin.js`, Wasm을 base64로 내장, 런타임 import 없음)과 `alid.extension.json`입니다.
-- 정본에는 의도(DSL)와 마지막 수렴 시드만 저장합니다. 화면 기하는 전부 계산 그래프가 파생합니다.
+- 스코프 엔티티가 다이어그램 전체를 한 레이어로 그립니다.
+- Substance 객체(또는 컬렉션) 하나가 **멤버 엔티티** 하나입니다. 선택, 연결선 앵커, `layoutBounds`가 일반 캔버스 객체처럼 동작합니다.
+- 정본에는 trio, `variation`, `topologyDigest`, 마지막 수렴 입력(`varyingValues`), 핀, 멤버 바인딩만 저장합니다. 화면 기하는 전부 파생입니다.
+- 읽기·페인트·내보내기는 문서를 쓰지 않습니다. 드래그는 놓을 때 한 번만 커밋합니다.
 
 ## 설치
 
 1. alid → 확장 관리 → "저장소에서 설치"에 `jiwonme/euclidraw-kite-extension`을 입력합니다.
-2. 설치기는 `alid.extension.json`의 `sha256`으로 `dist/plugin.js`를 검증합니다.
-3. 선택 의존성: `core.select-suite`, `core.clipboard`, `sys.minibuffer`, `doc.markdown-math`, `vector.pen-suite`. 없으면 해당 기능만 꺼집니다(예: `vector.path`가 없으면 베이킹 불가, `markdown.card`가 없으면 `card` 라벨을 SVG 텍스트로 그림).
+2. 설치기는 `alid.extension.json`의 `sha256`으로 `dist/plugin.js`(약 3.1 MiB)를 검증합니다.
+3. 선택 의존성: `core.select-suite`, `core.clipboard`, `vector.pen-suite`. 없으면 해당 기능만 꺼집니다(베이킹은 `vector.path`가 필요).
 
 개발 중에는 `pnpm dev`로 감시 빌드 서버(`http://127.0.0.1:5174`)를 띄우고 alid의 "개발 중인 확장 연결"에 주소를 넣습니다.
 
 ## 사용법
 
-- 도구 선반의 **Kite 도해** 또는 `M-x kite: insert-scope`로 예제(탈레스 정리)를 넣습니다. 스코프와 멤버가 한 번의 Undo로 생깁니다.
-- 멤버를 선택하면 점·반지름 핸들이 나타납니다. 끌면 매 프레임 구속을 만족하는 위치로 투영되고, 놓을 때 한 번만 커밋됩니다(Undo 한 번으로 원복). Esc, 창 이탈, pointercancel은 아무것도 쓰지 않습니다.
-- 드래그 중 **Shift**: 중점 · 원 위 · 일치 · 직교 스냅 후보를 배지로 보여 주고, Shift를 누른 채 놓으면 그 구속이 Substance에 추가됩니다(드래그 결과와 같은 Undo 단계).
-- 멤버 1~3개를 선택하면 화면 HUD(Space 2B)에 가능한 구속 버튼이 뜹니다(예: 선분 둘 → ⊥ 직교, // 평행, = 등길이).
-- 스코프를 선택하고 **Tri-DSL 편집기**(`kite: open-tri-editor`)에서 세 DSL을 고친 뒤 ⌘/Ctrl+Enter로 적용합니다. 새 기하는 약 180ms 동안 이전 상태에서 완화되며 보입니다(ScratchOverlay에서만; 문서는 한 번만 바뀜). Style `param`은 DialKit 슬라이더로 조절하며, 드래그 하나가 Undo 하나입니다.
-- **솔버 진단** 패널(`kite: open-diagnostics`)은 자유도, 구속된 자유도(야코비안 수치 계수), 남은 자유도, 반복 횟수, 잔차 에너지 E(x), 과구속 구속 목록과 Quick Fix(소프트로 완화 / 삭제)를 보여 줍니다.
-- 스코프 이동·크기 변경·회전은 프레임 변환만 바꾸므로 솔버를 다시 돌리지 않습니다.
+- 도구 선반의 **Penrose 도해** 또는 `M-x penrose.studio:insert-scope`로 예제를 넣습니다.
+- 스코프나 멤버를 선택하면 Penrose가 최적화 입력으로 보고한 속성에만 기즈모가 생깁니다. 식으로 계산된 속성에는 핸들이 없습니다.
+- 핸들을 끄는 동안 문서는 바뀌지 않고, 워커가 `stepTimes(2)`로 주변을 다시 최적화합니다. 놓을 때 핀 고정 + 한 트랜잭션으로 커밋하며, Undo 한 번으로 원복됩니다. Esc·blur·pointercancel은 아무것도 쓰지 않습니다.
+- **Tri-DSL 패널**에서 세 DSL을 고치고 ⌘/Ctrl+Enter로 적용합니다. 컴파일과 수렴이 끝난 뒤 DSL·수렴 입력·멤버가 한 트랜잭션으로 들어갑니다.
+- **진단 패널**은 digest, 자유 입력 수, 이동/크기 가능 도형 수, 단계, 에너지, 핀 수, 경고를 보여 줍니다.
 
-### 주요 명령
+### 명령
 
 | 명령 | 설명 |
 |---|---|
-| `kite: insert-scope` | 예제 스코프 추가 |
-| `kite: add-point` / `add-segment` / `add-circle` / `add-label` | 선언 추가(부족한 인자는 미니버퍼에서 고름) |
-| `kite: constrain` | 선택에 가능한 구속 고르기 |
-| `kite: constrain-tangent` 등 7종 | 특정 구속, 중첩 `completingRead`로 인자를 차례로 선택 |
-| `kite: relax-constraint` / `remove-constraint` | 과구속 Quick Fix |
-| `kite: toggle-pin` | 점/원 자유도 고정 |
-| `kite: reproject` | 현재 DSL과 시드에서 다시 수렴 |
-| `kite: bake-to-vector` | 수렴 기하를 `vector.path` + `markdown.card`로 바꾸고 스코프 제거 |
-| `kite: extract-subgraph` | 선택 멤버와 그 사이에 닫힌 구속만으로 새 스코프 |
-| `kite: set-param` | Style `param` 값 변경 |
-
-명령 요약에 한글 초성 별칭(예: 접선 `ㅈㅅ`)과 영문 별칭이 있어 미니버퍼 퍼지 검색에 걸립니다. P / S / C 키는 선택한 스코프 안에서 점 · 선분 · 원 빠른 작도 모드(`root.select.kite.studio:create`)를 엽니다.
+| `penrose.studio:insert-scope` | 예제 trio 삽입 (P) |
+| `penrose.studio:apply-dsl` | trio 적용 / 재컴파일 |
+| `penrose.studio:reset-example` | 예제로 되돌리기 |
+| `penrose.studio:reproject` | 현재 입력에서 다시 수렴 |
+| `penrose.studio:resample` | `variation`을 올려 초기 배치 재표본 |
+| `penrose.studio:toggle-pin` | 선택 멤버의 입력 고정/해제 |
+| `penrose.studio:bake-to-vector` | 도형을 `vector.path`로 굽고 스코프 제거 |
+| `penrose.studio:open-tri-editor` | Tri-DSL 패널 |
+| `penrose.studio:open-diagnostics` | 진단 패널 |
 
 ## DSL 맛보기
 
-```text
-# Domain
-type Point shape point
-type Circle shape circle
-predicate On(Point, Circle) = OnCircle
-constructor MidpointOf(Point, Point) -> Point = Midpoint
+Penrose 문법 그대로입니다. 전체 문법은 [Penrose 문서](https://penrose.cs.cmu.edu/docs/ref)를 보세요.
 
-# Substance
-Point A = (120, 260) pin
-Point B = (400, 260) pin
-Point O = MidpointOf(A, B)
-Circle c = center O through A
-Point P = PointOn(c)
-Label labThales = "∠APB = 90°" at bisector angP card
+```penrose
+-- Domain
+type Point
+type Circle
 
-# Style
-param k = 1 range(0.5, 3) step 0.1
-point { r: 4.5 * k; fill: #2563eb }
-@soft { compliance: 0.002 }
+-- Substance
+Point A
+Point B
+Circle c
+
+-- Style
+canvas { width = 520  height = 380 }
+
+forall Point p {
+  p.icon = Circle { r: 6; fillColor: #2563eb; strokeColor: #1e3a8a; strokeWidth: 1 }
+}
+forall Circle c {
+  c.icon = Circle { r: 96; fillColor: #00000000; strokeColor: #64748b; strokeWidth: 2 }
+  c.eq = Equation { string: "x^2 + y^2 = r^2"; center: (0, 150); fontSize: "16px" }
+  c.title = Text { string: "Penrose × alid"; center: (0, -164); fontSize: "15px" }
+}
 ```
 
-전체 문법은 [docs/dsl.md](docs/dsl.md), 설계와 PRD 대응표는 [docs/architecture.md](docs/architecture.md)를 보세요.
+## 구조
+
+```
+메인 스레드 (호스트)                          워커 (Blob, 번들에 문자열로 내장)
+penrose.scope 정본 ── trio·variation ──▶      compileTrio → MathJax 라벨 → 최적화
+  Computed (동기, 캐시만 읽음)                  │
+    computed.penrose.compiled ◀── Shape[] ─────┤
+    computed.penrose.layout   ◀── Shape[] ─────┘
+순수 SVG 렌더 (화면 = 내보내기)
+```
+
+- 워커는 `compile`, `layout`, `drag`, `converge`, `resample`, `dispose` 메시지만 받습니다.
+- 메인 번들은 엔진을 문자열로 한 번만 포함합니다. `@penrose/core`를 값으로 import하면 5 MiB를 넘으므로 타입 전용 import만 허용합니다.
+- 자세한 설계는 [docs/architecture.md](docs/architecture.md), P0 측정은 [docs/p0-spike.md](docs/p0-spike.md).
 
 ## 개발
 
 ```sh
 pnpm install
-pnpm build        # Wasm(변경 시) → dist/plugin.js → alid.extension.json
-pnpm test         # 빌드 후 vitest (로컬 alid 체크아웃의 실제 커널 + Loro 코어)
-pnpm test:rust    # crate-kite-solver cargo test
-pnpm check        # typecheck + test + 커밋된 산출물 일치 확인
+pnpm build        # worker 생성 → vite 번들 → alid.extension.json
+pnpm test         # 빌드 후 vitest (로컬 alid 체크아웃이 있으면 실제 커널 통합 테스트)
+pnpm typecheck
+pnpm check        # typecheck + test + 커밋된 산출물 일치
 ```
 
-- Rust 툴체인은 `PATH`, `$KITE_RUST_TOOLCHAIN`, `$ALID/.toolchain`, `~/Workspace/alid/.toolchain` 순서로 찾습니다. wasm32-unknown-unknown 타깃이 필요합니다.
-- `src/generated/kite-solver-wasm.ts`는 커밋됩니다. 크레이트 소스 해시가 같으면 Rust 없이도 빌드됩니다. 크레이트를 고쳤는데 툴체인이 없으면 빌드가 실패합니다.
-- 통합 테스트는 `$ALID` 또는 `~/Workspace/alid`가 있어야 돌고, 없으면 건너뜁니다(커널은 npm에 없습니다).
+`dist/plugin.js`, `alid.extension.json`, `src/generated/penrose-worker.ts`는 **커밋하는 생성 산출물**입니다. 직접 편집하지 않습니다.
+
+통합 테스트는 `$ALID` 또는 `~/Workspace/alid`가 있어야 돌고, 없으면 건너뜁니다. 순수 렌더러·측정·digest 테스트는 alid 없이도 돕니다.
 
 ## 측정값과 한계 (정직한 보고)
 
-- Node + jsdom, 59개 개체 / 112개 구속에서 드래그 한 프레임의 **Wasm 솔브 중앙값 약 0.10ms**(p95 0.12ms), 오버레이 기록과 커널 재계산을 포함한 **전체 프레임 중앙값 약 7.2ms**(p95 9.3ms)를 측정했습니다. 실제 브라우저의 120fps나 GC 0회는 측정하지 않았으므로 주장하지 않습니다.
-- 실제 브라우저, 실제 IME(한글 조합) 입력, 터치 기기는 수동 검증하지 않았습니다. IME 가드는 합성 이벤트(`isComposing`, keyCode 229, compositionend 후 16ms)로만 테스트했습니다.
-- Space 2B 팝오버는 `@alid/react`의 `NodeAnchoredPopover`가 아니라 확장 자체의 HUD 요소입니다(React 의존성 없이 단일 번들을 유지하기 위해).
-- 패널 열기 명령은 호스트의 `workspace.layout`/`ui.workbench`가 `openPanel`을 제공할 때만 동작합니다.
-- 붙여넣은 스코프는 읽기만으로 올바르게 그려지지만(추가 쓰기 0회), 저장된 `entityBindings`/`convergedSeeds` 키는 다음 Kite 커밋 때 새 id로 갱신됩니다.
-- XPBD는 비볼록 구속에서 국소해에 머물 수 있습니다. 시드가 없는 자유도만 결정적 후보 탐색(`discrete_init`)으로 배치하고, 기존 기하는 흔들지 않습니다.
+- Node + 인라인 엔진, 기본 예제(점 3 · 원 1 · Equation · Text): 컴파일+수렴 **37 ms**, 첫 레이아웃 8 ms, 드래그 프레임 중앙값 **1.6 ms**·p95 1.8 ms. 실제 브라우저 Web Worker 왕복은 측정하지 않았습니다.
+- 엔진 워커 2.88 MiB(gzip 0.82 MiB), 최종 번들 3.1 MiB.
+- 텍스트 측정은 고정 Helvetica 메트릭 표입니다. `<text>`는 플랫폼 폰트로 그려지므로 측정과 실제 글리프 폭이 어긋나 좁은 상자에서 넘칠 수 있습니다. Equation은 MathJax 경로라 결정적입니다.
+- 드래그는 Penrose처럼 완전한 구속 고정이 아니라 **입력 재핀 + 제한 스텝**입니다. 놓을 때 0스텝 재핀으로 입력을 정확히 고정하지만, 주변 도형은 근사 최적화 상태입니다.
+- 페널티 기반 최적화라 직각·원 위의 점이 v1처럼 정확히 만족되지는 않습니다. 의도된 트레이드오프입니다.
+- `Path`·`Group`은 선택 기하만 제공하고 기즈모가 없습니다. `Image`는 `data:` URI만 허용합니다. 베이킹은 Circle·Ellipse·Line·Rectangle·Polygon·Polyline만 지원합니다.
+- Penrose 레지스트리 191개 전체 회귀는 아직 없습니다. 호스트 계약 4종과 기본 예제만 자동 검증합니다.
+- 실제 브라우저, 한글 IME, 터치 기기는 수동 검증하지 않았습니다.
+- v1 `kite.studio` 문서는 마이그레이션하지 않습니다. ID가 `penrose.studio`로 바뀌어 v1 스코프는 읽히지 않습니다.
 
 ## 라이선스
 
-[LICENSE](LICENSE)
+이 저장소의 코드는 [LICENSE](LICENSE)를 따릅니다. 번들에 포함한 제3자 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 있습니다.

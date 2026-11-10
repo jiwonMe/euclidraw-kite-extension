@@ -5,3 +5,6 @@ node_modules/
 # dist/plugin.js and alid.extension.json are intentionally committed.
 .alid-dev/
 crate-kite-solver/target/
+
+# worker build output
+.worker-build/

@@ -15,19 +15,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      # Without a Rust toolchain the build uses the committed src/generated/kite-solver-wasm.ts,
-      # and fails if crate-kite-solver/ changed without regenerating it (source hash check).
-      - run: git diff --exit-code -- dist/plugin.js alid.extension.json src/generated/kite-solver-wasm.ts
-  rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4.2.2
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - run: cargo test --release
-        working-directory: crate-kite-solver
-      - uses: actions/setup-node@v4.4.0
-        with:
-          node-version: '24'
-      - run: node scripts/build-wasm.mjs --force
+      # The engine worker is a committed generated artifact; a stale one fails here.
+      - run: git diff --exit-code -- dist/plugin.js alid.extension.json src/generated/penrose-worker.ts
