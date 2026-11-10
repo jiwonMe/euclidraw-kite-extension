@@ -102,7 +102,7 @@ pnpm check        # typecheck + test + 커밋된 산출물 일치
 - 페널티 기반 최적화라 직각·원 위의 점이 v1처럼 정확히 만족되지는 않습니다. 의도된 트레이드오프입니다.
 - `Path`·`Group`은 선택 기하만 제공하고 기즈모가 없습니다. `Image`는 `data:` URI만 허용합니다. 베이킹은 Circle·Ellipse·Line·Rectangle·Polygon·Polyline만 지원합니다.
 - Penrose 레지스트리 191개 전체 회귀는 아직 없습니다. 호스트 계약 4종과 기본 예제만 자동 검증합니다.
-- 실제 브라우저, 한글 IME, 터치 기기는 수동 검증하지 않았습니다.
+- 빌드된 워커 번들은 `worker_threads`로 실제 실행해 컴파일·MathJax 라벨 왕복을 검증합니다. 다만 브라우저 Blob URL 로더·CSP·한글 IME·터치 기기는 수동 검증하지 않았습니다.
 - v1 `kite.studio` 문서는 마이그레이션하지 않습니다. ID가 `penrose.studio`로 바뀌어 v1 스코프는 읽히지 않습니다.
 
 ## 라이선스
