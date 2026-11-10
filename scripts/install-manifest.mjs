@@ -57,7 +57,7 @@ export async function createInstallManifest(outDir = new URL('dist/', root)) {
     capabilities: {
       readAspects: [...aspects, 'core.transform', 'core.bounds', 'core.stacking'],
       writeAspects: [...aspects, 'core.transform', 'core.bounds', 'core.stacking'],
-      services: ['canvas.active-tool-surface', 'canvas.surface', 'canvas.interaction', 'canvas.selection', 'canvas.frames', 'canvas.tool-input'],
+      services: ['canvas.active-tool-surface', 'canvas.surface', 'canvas.interaction', 'canvas.selection', 'canvas.frames'],
       commands,
     },
   };

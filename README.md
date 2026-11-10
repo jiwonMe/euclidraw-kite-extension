@@ -23,7 +23,7 @@ jiwonme/euclidraw-kite-extension
 
 설치 후 왼쪽 도구 선반의 **Kite 다이어그램** 버튼, 또는 명령 팔레트의 `Kite 다이어그램 추가`로 스코프와 기본 멤버를 만듭니다.
 
-설치 API 2와 `engine: ^0.1.0` 호환 호스트가 필요합니다. 이 확장은 사용자가 승인한 뒤 앱 안에서 실행되는 **신뢰 확장**입니다. `capabilities`는 접근 의도를 설명하며 DOM·네트워크를 격리하는 샌드박스가 아닙니다.
+설치 API 2와 `engine: ^0.1.0` 호환 호스트가 필요합니다. `core.select-suite`와 `sys.minibuffer`는 선택 의존성입니다. 선택 확장이 없을 때도 생성·렌더·DSL 적용은 동작하지만, 선택 기반 구속 명령과 미니버퍼 입력은 제한됩니다. 이 확장은 사용자가 승인한 뒤 앱 안에서 실행되는 **신뢰 확장**입니다. `capabilities`는 접근 의도를 설명하며 DOM·네트워크를 격리하는 샌드박스가 아닙니다.
 
 ---
 
@@ -154,7 +154,9 @@ EucliDraw의 **확장 관리 → 개발 중인 확장 연결**에 `pnpm dev` 주
 - 멤버 투영·순수 SVG 결정론·XSS 이스케이프·선택 히트 테스트
 - 설치 계약, 명령·패널 등록, 단일 Undo 그룹 생성, 읽기 시 쓰기 0회
 - 드래그당 정확히 한 번의 정본 패치와 원래 시드로의 복원
+- Shift 위상 스냅 승격(중점·원 위)과 승격된 구속 문장 기록
 - 커밋된 `dist/plugin.js`의 SHA-256·크기·단일 ESM 계약
+- 로컬 alid 커널 체크아웃에서 실제 `ExtensionRuntimeRegistry` 설치, 스코프 생성, `computed.kite.member`/`computed.effectiveBounds`, 순수 SVG 내보내기, 읽기 시 쓰기 0회, 기즈모 드래그→ScratchOverlay 미리보기→단일 커밋, dispose 스모크 1회 수행
 
 아직 구현하지 않았거나 검증하지 않은 것:
 

@@ -6,7 +6,8 @@
   "engine": "^0.1.0",
   "dependencies": {},
   "optionalDependencies": {
-    "sys.minibuffer": "^0.1.0"
+    "sys.minibuffer": "^0.1.0",
+    "core.select-suite": "^0.1.0"
   },
   "conflicts": [],
   "provides": {

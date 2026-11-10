@@ -47,6 +47,7 @@ describe('Kite Studio package contract', () => {
     activation.dispose();
     expect(host.commands.size).toBe(0);
     expect(host.service('kite.api')).toBeUndefined();
+    expect(() => (activation.api.insert as () => unknown)()).toThrow(/비활성화/);
     host.dispose();
   });
 });

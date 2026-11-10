@@ -191,16 +191,8 @@ export function projectMember(
 function rightAngleSquares(compiled: CompiledScope, layout: ReturnType<typeof layoutFor>, instance: SubstanceInstance, box: Box) {
   const squares: { x: number; y: number; ax: number; ay: number; bx: number; by: number; size: number }[] = [];
   const dir = (from: Point, to: Point) => normalize({ x: to.x - from.x, y: to.y - from.y });
-  if (instance.kind === 'angle-mark' && instance.angle) {
-    const [aId, vertexId, bId] = instance.angle;
-    const a = pointOf(layout, aId), vertex = pointOf(layout, vertexId), b = pointOf(layout, bId);
-    const da = dir(vertex, a), db = dir(vertex, b);
-    if (Math.abs(da.x * db.x + da.y * db.y) < 0.02) {
-      const world = toWorld(box, vertex.x, vertex.y), wa = localDirection(box, da.x, da.y), wb = localDirection(box, db.x, db.y);
-      squares.push({ x: world.x, y: world.y, ax: wa.x, ay: wa.y, bx: wb.x, by: wb.y, size: 9 });
-    }
-    return squares;
-  }
+  // The angle-mark renderer draws its own right-angle square from the exact arms.
+  if (instance.kind === 'angle-mark') return squares;
   if (instance.kind !== 'segment' && instance.kind !== 'line' && instance.kind !== 'ray') return squares;
   for (const badge of compiled.badges.rightAngles) {
     if (badge.a !== instance.id && badge.b !== instance.id) continue;
@@ -385,7 +377,9 @@ export function polygonContainment(point: Point, points: readonly Point[]): bool
 
 export function angleWithin(angle: number, start: number, end: number): boolean {
   const normalizeAngle = (value: number) => { let next = value; while (next > Math.PI) next -= Math.PI * 2; while (next < -Math.PI) next += Math.PI * 2; return next; };
-  const span = normalizeAngle(end - start);
+  let span = end - start;
+  while (span > Math.PI * 2) span -= Math.PI * 2;
+  while (span < -Math.PI * 2) span += Math.PI * 2;
   const delta = normalizeAngle(angle - start);
   return span >= 0 ? delta >= 0 && delta <= span : delta <= 0 && delta >= span;
 }

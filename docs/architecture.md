@@ -171,7 +171,7 @@ PRD는 `computed.kite.compiledVm`, `computed.kite.solvedGeometry`를 별도 노�
 
 ## 9. 검증 경계
 
-`pnpm test`는 35개 테스트로 DSL·솔버·기하·플러그인 계약·번들 해시를 검증합니다. 다음은 자동 테스트가 아닙니다.
+`pnpm test`는 40개 테스트로 DSL·솔버·기하·플러그인 계약·번들 해시를 검증합니다. 별도로 로컬 alid 커널 체크아웃에서 실제 `ExtensionRuntimeRegistry.registerPackages` 설치, 생성, computed bounds, 순수 SVG, 읽기 0쓰기, 기즈모 드래그→ScratchOverlay 미리보기→단일 커밋, dispose를 확인했습니다(저장소 자동 테스트에는 alid 체크아웃 의존성 때문에 포함하지 않음). 다음은 자동 테스트가 아닙니다.
 
 - 실제 EucliDraw 브라우저에서의 설치·선택·드래그·Undo·SVG 내보내기
 - 실제 한글 IME 조합 중 Escape/Enter 동작

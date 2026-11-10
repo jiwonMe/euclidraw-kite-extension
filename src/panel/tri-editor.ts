@@ -255,8 +255,12 @@ function mountTriEditor(host: HTMLElement, context: WorkbenchPanelContext): () =
     }
   }, { signal });
 
-  const offSelection = context.onSelectionChange(() => load());
-  const offWorld = context.onWorldMutated(() => { if (!dirty) load(); });
+  const offSelection = context.onSelectionChange(() => {
+    if (dirty && scopeIdOf() === scopeId) return;
+    if (dirty) { status.textContent = '저장되지 않은 초안이 있습니다'; status.style.color = 'var(--alid-danger,#b91c1c)'; return; }
+    load();
+  });
+  const offWorld = context.onWorldMutated(() => { if (!dirty && scopeIdOf() === scopeId) load(); });
   load();
   return () => {
     abort.abort();
@@ -287,7 +291,7 @@ export function setStyleNumber(source: string, selector: string, key: string, va
   return source.replace(rulePattern, (whole, selectors: string, body: string) => {
     const matches = selectors.replace(/(^|\n)\s*(#|\/\/).*$/gm, '$1').replace(/\s+/g, ' ').split(',').map(part => part.trim()).includes(selector);
     if (!matches) return whole;
-    const nextBody = body.replace(new RegExp(`(\\b${escapeRegExp(key)}\\s*:\\s*)-?(?:\\d+(?:\\.\\d+)?)`, 'g'), (_match, prefix: string) => `${prefix}${value}`);
+    const nextBody = body.replace(new RegExp(`(^|;)\\s*${escapeRegExp(key)}\\s*:\\s*-?(?:\\d+(?:\\.\\d+)?)`, 'g'), (_match, prefix: string) => `${prefix} ${key}: ${value}`);
     return `${selectors}{${nextBody}}`;
   });
 }

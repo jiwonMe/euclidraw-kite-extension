@@ -143,7 +143,7 @@ function arrowHead(tip: Point, previous: Point, size: number): string {
 }
 
 export function arcPath(center: Point, radius: number, start: number, end: number): string {
-  const delta = normalizeAngle(end - start);
+  const delta = arcSpan(start, end);
   const p0 = { x: center.x + Math.cos(start) * radius, y: center.y + Math.sin(start) * radius };
   const p1 = { x: center.x + Math.cos(start + delta) * radius, y: center.y + Math.sin(start + delta) * radius };
   const large = Math.abs(delta) > Math.PI ? 1 : 0;
@@ -151,11 +151,11 @@ export function arcPath(center: Point, radius: number, start: number, end: numbe
   return `M ${n(p0.x)} ${n(p0.y)} A ${n(radius)} ${n(radius)} 0 ${large} ${sweep} ${n(p1.x)} ${n(p1.y)}`;
 }
 
-function normalizeAngle(value: number): number {
-  let angle = value;
-  while (angle > Math.PI) angle -= Math.PI * 2;
-  while (angle < -Math.PI) angle += Math.PI * 2;
-  return angle;
+function arcSpan(start: number, end: number): number {
+  let delta = end - start;
+  while (delta > Math.PI * 2) delta -= Math.PI * 2;
+  while (delta < -Math.PI * 2) delta += Math.PI * 2;
+  return delta;
 }
 
 function stressHalo(derived: DerivedGeometry): string {

@@ -29,10 +29,14 @@ export function surfaceOf(context: ActivationContext): CanvasToolSurface | undef
   return context.services.get<{ get(): CanvasToolSurface | undefined }>('canvas.active-tool-surface')?.get();
 }
 
+export function selectionSuite(context: ActivationContext): { getSelection?(): readonly EntityId[]; select?(id: EntityId | null): void } | undefined {
+  try { return context.services.get('canvas.selection'); } catch { return undefined; }
+}
+
 export function selectedIds(context: ActivationContext): EntityId[] {
   const surface = surfaceOf(context);
   if (surface) return [...surface.selection.getSelection()];
-  const suite = context.services.get<{ getSelection?(): readonly EntityId[] }>('canvas.selection');
+  const suite = selectionSuite(context);
   if (suite?.getSelection) return [...suite.getSelection()];
   return [];
 }
@@ -40,7 +44,7 @@ export function selectedIds(context: ActivationContext): EntityId[] {
 export function selectEntity(context: ActivationContext, id: EntityId | null): void {
   const surface = surfaceOf(context);
   if (surface) { surface.selection.select(id); return; }
-  const suite = context.services.get<{ select?(id: EntityId | null): void }>('canvas.selection');
+  const suite = selectionSuite(context);
   if (suite?.select) suite.select(id);
 }
 

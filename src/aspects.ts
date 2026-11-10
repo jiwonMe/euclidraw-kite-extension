@@ -3,12 +3,12 @@ import type {
 } from './types.ts';
 import { COMMANDS, MEMBER_ASPECT_ID, SCOPE_ASPECT_ID } from './manifest.ts';
 import { createScopeDefaults } from './defaults.ts';
-import { solveScope } from './solver/runtime.ts';
+import { compileCached, solveScope } from './solver/runtime.ts';
 import {
   angleWithin, lineDistance, pointDistance, polygonContainment, projectMember, rayDistance,
   scopeBox, segmentDistance,
 } from './geometry.ts';
-import { memberSvg } from './render/member.ts';
+import { escapeXml, memberSvg } from './render/member.ts';
 
 export function deriveMember(props: Readonly<MemberProps>, _id: EntityId, view: ComputedReadView): DerivedGeometry | undefined {
   const scope = view.getCanonical<ScopeProps>(props.scopeId, SCOPE_ASPECT_ID);
@@ -29,7 +29,20 @@ export const scopeAspect: AspectSpec<ScopeProps, { x: number; y: number; width: 
   textSearchFields: ['substanceDsl'],
   dependsOnCanonical: [SCOPE_ASPECT_ID, 'core.transform', 'core.bounds'],
   dependsOnComputed: [],
-  renderSvg: () => ({ svg: '' }),
+  derive(_props, id, view) {
+    const transform = view.getCanonical<{ x?: number; y?: number; rotation?: number }>(id, 'core.transform');
+    const bounds = view.getCanonical<{ width?: number; height?: number }>(id, 'core.bounds');
+    if (!transform || !bounds) return undefined;
+    return { x: Number(transform.x) || 0, y: Number(transform.y) || 0, width: Math.max(1, Number(bounds.width) || 520), height: Math.max(1, Number(bounds.height) || 360), rotation: Number(transform.rotation) || 0 };
+  },
+  renderSvg(props, derived) {
+    if (!derived) return { svg: '' };
+    const compiled = compileCached(props);
+    if (compiled.ok) return { svg: '' };
+    const error = compiled.errors[0];
+    const label = `Kite DSL 오류 · L${error?.line ?? 0}: ${error?.message ?? '알 수 없는 오류'}`;
+    return { svg: `<g transform="translate(${derived.x},${derived.y})"><rect x="0" y="0" width="${Math.min(derived.width, 560)}" height="30" rx="6" fill="#fef2f2" stroke="#fca5a5"/><text x="10" y="19" font-family="system-ui,sans-serif" font-size="11" fill="#b91c1c">${escapeXml(label)}</text></g>` };
+  },
 };
 
 export const memberAspect: AspectSpec<MemberProps, DerivedGeometry> = {

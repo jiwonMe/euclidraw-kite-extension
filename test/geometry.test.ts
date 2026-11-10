@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockHost } from './harness.ts';
 import { applyDsl, insertDiagram } from '../src/tools/documents.ts';
 import { deriveMember, memberAspect } from '../src/aspects.ts';
-import { memberSvg } from '../src/render/member.ts';
+import { arcPath, memberSvg } from '../src/render/member.ts';
 import { toWorld, toLocal } from '../src/geometry.ts';
 import type { ComputedReadView, DerivedGeometry, EntityId, MemberProps, ScopeProps } from '../src/types.ts';
 
@@ -88,6 +88,12 @@ describe('pure member projection and SVG output', () => {
     expect(local.x).toBeCloseTo(100, 6);
     expect(local.y).toBeCloseTo(80, 6);
     host.dispose();
+  });
+
+  it('keeps long arcs long in the pure SVG path', () => {
+    const path = arcPath({ x: 0, y: 0 }, 10, 0, Math.PI * 1.5);
+    expect(path).toContain('0 1 1');
+
   });
 
   it('exposes exact selection geometry for members', () => {

@@ -14,7 +14,8 @@ const solveCache = new WeakMap<object, SolveEntry>();
 const COMPILE_CACHE_LIMIT = 24;
 
 export function compileCached(scope: Readonly<ScopeProps>): CompiledScope {
-  const key = `${scope.domainDsl ?? ''}\u0000${scope.substanceDsl ?? ''}\u0000${scope.styleDsl ?? ''}`;
+  const bindingKey = JSON.stringify(Object.entries(scope.entityBindings ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+  const key = `${scope.domainDsl ?? ''}\u0000${scope.substanceDsl ?? ''}\u0000${scope.styleDsl ?? ''}\u0000${bindingKey}`;
   const hit = compileCache.get(key);
   if (hit) { hit.touched = Date.now(); return hit.compiled; }
   const compiled = compileScope(scope);
@@ -95,7 +96,8 @@ export interface Diagnostics {
 /** Numerical rank and residual report for the diagnostics panel. Never writes. */
 export function analyzeScope(compiled: CompiledScope, state: SolvedState, pins?: MemberPins): Diagnostics {
   const layout = layoutFor(compiled, pins);
-  layout.values.set(state.values);
+  const hasValues = state.values.length === layout.values.length;
+  if (hasValues) layout.values.set(state.values);
   let totalDofs = 0;
   for (const index of layout.free) if (index) totalDofs++;
   const residuals = compiled.constraints.map(constraint => constraintResidual(layout, compiled, constraint));
@@ -104,7 +106,7 @@ export function analyzeScope(compiled: CompiledScope, state: SolvedState, pins?:
     .filter(entry => entry.residual > 1e-3)
     .sort((a, b) => b.residual - a.residual)
     .slice(0, 12);
-  const constrainedDofs = estimateRank(compiled, layout.values, layout.free, pins);
+  const constrainedDofs = hasValues ? estimateRank(compiled, layout.values, layout.free, pins) : 0;
   const stress = [...state.stress.entries()]
     .map(([instanceId, value]) => ({ instanceId, value }))
     .filter(entry => entry.value > 0.02)

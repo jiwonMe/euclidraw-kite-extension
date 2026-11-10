@@ -27,6 +27,7 @@ export function compileScope(scope: Readonly<ScopeProps>): CompiledScope {
   const domainSource = String(scope.domainDsl ?? '');
   const substanceSource = String(scope.substanceDsl ?? '');
   const styleSource = String(scope.styleDsl ?? '');
+  const bindingKey = JSON.stringify(Object.entries(scope.entityBindings ?? {}).sort(([a], [b]) => a.localeCompare(b)));
   const domain = parseDomain(domainSource);
   const substance = parseSubstance(substanceSource, domain);
   const style = parseStyle(styleSource);
@@ -70,7 +71,7 @@ export function compileScope(scope: Readonly<ScopeProps>): CompiledScope {
   }
 
   return {
-    key: `${domainSource}\u0000${substanceSource}\u0000${styleSource}`,
+    key: `${domainSource}\u0000${substanceSource}\u0000${styleSource}\u0000${bindingKey}`,
     ok: errors.length === 0,
     errors,
     domain,

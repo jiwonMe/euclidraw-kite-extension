@@ -4,6 +4,7 @@ import { parseDomain } from '../src/dsl/domain.ts';
 import { parseSubstance } from '../src/dsl/substance.ts';
 import { numericStyleFields, parseStyle, styleFor } from '../src/dsl/style.ts';
 import { createScopeDefaults, DEFAULT_DOMAIN, DEFAULT_STYLE, DEFAULT_SUBSTANCE } from '../src/defaults.ts';
+import { compileCached } from '../src/solver/runtime.ts';
 import { setStyleNumber } from '../src/panel/tri-editor.ts';
 
 describe('Domain / Substance / Style DSL', () => {
@@ -70,6 +71,14 @@ describe('Domain / Substance / Style DSL', () => {
     const compiled = compileScope({ ...createScopeDefaults(), substanceDsl: substance });
     expect(compiled.ok).toBe(true);
     expect(compiled.constraints).toContainEqual(expect.objectContaining({ type: 'onCircle', point: 'B', circle: 'c' }));
+  });
+
+  it('rebuilds the compile cache when only entity bindings change', () => {
+    const base = createScopeDefaults();
+    const first = compileCached({ ...base, entityBindings: { A: 'ent_a' } });
+    const second = compileCached({ ...base, entityBindings: { A: 'ent_a', B: 'ent_b' } });
+    expect(first.bindings).toEqual({ A: 'ent_a' });
+    expect(second.bindings).toEqual({ A: 'ent_a', B: 'ent_b' });
   });
 
   it('keeps the domain and substance sources independent', () => {

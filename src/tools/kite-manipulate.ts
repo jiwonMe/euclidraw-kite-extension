@@ -463,7 +463,8 @@ function fallbackSurface(context: ActivationContext): CanvasToolSurface | undefi
     history?: { begin(): void; commit(): void; abort(): void };
     onSelectionChanged?(ids: readonly EntityId[]): void;
   }>('canvas.interaction');
-  const suite = context.services.get<{ getSelection?(): readonly EntityId[]; select?(id: EntityId | null): void }>('canvas.selection');
+  let suite: { getSelection?(): readonly EntityId[]; select?(id: EntityId | null): void } | undefined;
+  try { suite = context.services.get('canvas.selection'); } catch { suite = undefined; }
   if (!shell?.element || !shell.hud) return undefined;
   return {
     surface: { element: shell.element, hud: shell.hud },

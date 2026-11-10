@@ -5,7 +5,8 @@
   "engine": "^0.1.0",
   "dependencies": {},
   "optionalDependencies": {
-    "sys.minibuffer": "^0.1.0"
+    "sys.minibuffer": "^0.1.0",
+    "core.select-suite": "^0.1.0"
   },
   "conflicts": [],
   "provides": {
@@ -21,7 +22,7 @@
   "title": "Kite Studio",
   "summary": "Domain · Substance · Style 3분할 DSL과 다양체 정사영 솔버로, 구속 조건이 살아있는 기하 도해를 캔버스에 만듭니다.",
   "entry": "dist/plugin.js",
-  "sha256": "3964e363124977f3a552182a53ba7bf777fb96c54e44de76e90633512a3da027",
+  "sha256": "4e4e9cdd6c4ab2558dce09dadd300fe9ad19631ebfe5ed38bcc6ba484fd8c853",
   "aspectIds": [
     "kite.scope",
     "kite.member"
@@ -46,8 +47,7 @@
       "canvas.surface",
       "canvas.interaction",
       "canvas.selection",
-      "canvas.frames",
-      "canvas.tool-input"
+      "canvas.frames"
     ],
     "commands": [
       "kite.studio:insert-diagram",

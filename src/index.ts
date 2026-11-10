@@ -65,32 +65,38 @@ const spec = {
     ],
   },
   activate(context: ActivationContext) {
+    let active = true;
+    const live = () => { if (!active) throw new Error('Kite Studio 확장이 비활성화되었습니다. 공개 API를 다시 조회하세요.'); };
     const disposers: (() => void)[] = [];
     const commands: CommandSpec[] = createCommandSpecs(context);
     for (const command of commands) disposers.push(context.commands.register(command));
     const manipulator = new KiteManipulator(context);
     disposers.push(() => manipulator.dispose());
-    const releaseApi = context.services.provide?.<KiteApi>('kite.api', Object.freeze({
+    const api: KiteApi = Object.freeze({
       version: EXTENSION_MANIFEST.version,
       aspectIds: SCOPE_ASPECT_IDS,
       commands: COMMANDS,
-      insert: () => insertDiagram(context),
-      apply: (input: Parameters<typeof applyDsl>[1]) => applyDsl(context, input),
-      compile: (scope: Readonly<ScopeProps>) => compileCached(scope),
+      insert: () => { live(); return insertDiagram(context); },
+      apply: (input: Parameters<typeof applyDsl>[1]) => { live(); return applyDsl(context, input); },
+      compile: (scope: Readonly<ScopeProps>) => { live(); return compileCached(scope); },
       analyze: (scope: Readonly<ScopeProps>) => {
+        live();
         const solved = solveScope(scope, context.world.getCanonicalView());
         return analyzeScope(solved.compiled, solved.state, solved.pins);
       },
-      freeze: () => freezeGeometry(context),
-    }));
+      freeze: () => { live(); return freezeGeometry(context); },
+    });
+    const releaseApi = context.services.provide?.<KiteApi>('kite.api', api);
     if (releaseApi) disposers.push(releaseApi);
     return {
       api: Object.freeze({
-        insert: () => insertDiagram(context),
-        apply: (input: Parameters<typeof applyDsl>[1]) => applyDsl(context, input),
+        insert: () => { live(); return insertDiagram(context); },
+        apply: (input: Parameters<typeof applyDsl>[1]) => { live(); return applyDsl(context, input); },
         commands: COMMANDS,
       }),
       dispose() {
+        if (!active) return;
+        active = false;
         for (const dispose of disposers.splice(0).reverse()) dispose();
         clearRuntimeCaches();
       },
