@@ -1,0 +1,36 @@
+{
+  "id": "kite.studio",
+  "title": "Kite Studio",
+  "version": "0.1.0",
+  "summary": "Domain · Substance · Style 3분할 DSL과 다양체 정사영 솔버로, 구속 조건이 살아있는 기하 도해를 캔버스에 만듭니다.",
+  "engine": "^0.1.0",
+  "dependencies": {},
+  "optionalDependencies": {
+    "sys.minibuffer": "^0.1.0"
+  },
+  "conflicts": [],
+  "provides": {
+    "services": [
+      "kite.api"
+    ],
+    "hsmSlots": []
+  },
+  "commands": [
+    "insert-diagram",
+    "apply-dsl",
+    "reset-example",
+    "add-point",
+    "add-constraint",
+    "constrain-on-circle",
+    "constrain-midpoint",
+    "constrain-perpendicular",
+    "constrain-equal-length",
+    "constrain-horizontal",
+    "constrain-vertical",
+    "constrain-tangent",
+    "set-distance",
+    "freeze-geometry",
+    "repair-bindings",
+    "reproject"
+  ]
+}

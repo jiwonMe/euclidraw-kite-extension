@@ -1,0 +1,71 @@
+{
+  "apiVersion": 2,
+  "id": "kite.studio",
+  "version": "0.1.0",
+  "engine": "^0.1.0",
+  "dependencies": {},
+  "optionalDependencies": {
+    "sys.minibuffer": "^0.1.0"
+  },
+  "conflicts": [],
+  "provides": {
+    "services": [
+      "kite.api"
+    ],
+    "aspects": [
+      "kite.scope",
+      "kite.member"
+    ],
+    "hsmSlots": []
+  },
+  "title": "Kite Studio",
+  "summary": "Domain · Substance · Style 3분할 DSL과 다양체 정사영 솔버로, 구속 조건이 살아있는 기하 도해를 캔버스에 만듭니다.",
+  "entry": "dist/plugin.js",
+  "sha256": "3964e363124977f3a552182a53ba7bf777fb96c54e44de76e90633512a3da027",
+  "aspectIds": [
+    "kite.scope",
+    "kite.member"
+  ],
+  "capabilities": {
+    "readAspects": [
+      "kite.scope",
+      "kite.member",
+      "core.transform",
+      "core.bounds",
+      "core.stacking"
+    ],
+    "writeAspects": [
+      "kite.scope",
+      "kite.member",
+      "core.transform",
+      "core.bounds",
+      "core.stacking"
+    ],
+    "services": [
+      "canvas.active-tool-surface",
+      "canvas.surface",
+      "canvas.interaction",
+      "canvas.selection",
+      "canvas.frames",
+      "canvas.tool-input"
+    ],
+    "commands": [
+      "kite.studio:insert-diagram",
+      "kite.studio:apply-dsl",
+      "kite.studio:reset-example",
+      "kite.studio:add-point",
+      "kite.studio:add-constraint",
+      "kite.studio:constrain-on-circle",
+      "kite.studio:constrain-midpoint",
+      "kite.studio:constrain-perpendicular",
+      "kite.studio:constrain-equal-length",
+      "kite.studio:constrain-horizontal",
+      "kite.studio:constrain-vertical",
+      "kite.studio:constrain-tangent",
+      "kite.studio:set-distance",
+      "kite.studio:freeze-geometry",
+      "kite.studio:repair-bindings",
+      "kite.studio:reproject"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "euclidraw-kite-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && vitest run",
+    "test:watch": "vitest",
+    "check:dist": "pnpm build && git diff --exit-code -- dist/plugin.js alid.extension.json",
+    "check": "pnpm typecheck && pnpm test && pnpm check:dist"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "jsdom": "^27.0.0",
+    "typescript": "~5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  }
+}
