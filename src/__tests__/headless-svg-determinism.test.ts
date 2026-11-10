@@ -53,6 +53,24 @@ suite('headless SVG determinism (real SceneVectorCompiler)', () => {
     peer.dispose();
   });
 
+  it('shows a quiet pending indicator while the worker compiles', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    const scope = host.world.getCanonical(scopeId, 'penrose.scope');
+    // A remote peer changed the trio; the local worker has to compile it again.
+    host.world.applyCanonicalTransaction('test:pending', [
+      { id: scopeId, aspect: 'penrose.scope', patch: { styleDsl: `${scope.styleDsl}\n` } },
+    ], 'remote:peer');
+    host.paint();
+    const pending = host.compiler.compileToPureSvg(host.world);
+    expect(pending).toContain('data-penrose-pending="1"');
+    expect(pending).toContain('컴파일 중');
+    expect(pending).not.toContain('Penrose: 컴파일 중');
+    await settle(host);
+    expect(host.compiler.compileToPureSvg(host.world)).not.toContain('data-penrose-pending');
+  });
+
   it('shows a DSL error badge instead of geometry and never throws while exporting', async () => {
     host = await startHost();
     const scopeId = await host.run<string>('penrose.studio:insert-scope');

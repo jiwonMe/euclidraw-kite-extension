@@ -26,6 +26,32 @@ function badge(x: number, y: number, text: string): string {
   );
 }
 
+/**
+ * A quiet, centred status pill while the worker compiles. Static (no SMIL or
+ * CSS animation) so screen and export stay byte-identical.
+ */
+function pendingIndicator(box: { x: number; y: number; width: number; height: number }): string {
+  const width = Math.max(96, Math.min(124, box.width - 16));
+  const height = 26;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const left = cx - width / 2;
+  const top = cy - height / 2;
+  const ringX = left + 18;
+  const radius = 5.5;
+  return (
+    `<g data-penrose-pending="1" opacity="0.95">` +
+    `<rect x="${left}" y="${top}" width="${width}" height="${height}" rx="${height / 2}" ` +
+    `fill="rgba(148,163,184,0.10)" stroke="rgba(148,163,184,0.32)" stroke-width="1"/>` +
+    `<circle cx="${ringX}" cy="${cy}" r="${radius}" fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="2"/>` +
+    `<path d="M${ringX} ${cy - radius} A${radius} ${radius} 0 0 1 ${ringX + radius} ${cy}" ` +
+    `fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>` +
+    `<text x="${left + 30}" y="${cy}" dominant-baseline="middle" ` +
+    `font="11px 'Helvetica Neue', Helvetica, Arial, sans-serif" letter-spacing="0.2" fill="#94a3b8">컴파일 중</text>` +
+    `</g>`
+  );
+}
+
 function escapeText(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
@@ -66,7 +92,7 @@ export function scopeSpec(panels: NonNullable<AspectSpec<PenroseScopeAspect, Sco
     renderSvg(_props, derived) {
       if (!derived) return { svg: '' };
       if (derived.error) return { svg: badge(derived.x, derived.y, `Penrose: ${derived.error}`.slice(0, 140)) };
-      if (derived.pending && !derived.svg) return { svg: badge(derived.x, derived.y, 'Penrose: 컴파일 중…') };
+      if (derived.pending && !derived.svg) return { svg: pendingIndicator(derived) };
       return { svg: derived.svg ?? '' };
     },
     selection: {
