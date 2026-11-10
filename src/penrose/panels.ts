@@ -126,8 +126,20 @@ export function createDiagnosticsPanel(): WorkbenchPanelSpec {
     defaultZone: 'right',
     mount(host, context) {
       host.setAttribute('style', `padding:8px;font:${FONT};min-width:280px;height:100%;box-sizing:border-box;overflow:auto`);
+      const actions = el('div', 'display:flex;gap:6px;margin-bottom:8px');
+      const resample = el('button', 'padding:2px 8px;font:inherit;cursor:pointer', '재표본');
+      const reproject = el('button', 'padding:2px 8px;font:inherit;cursor:pointer', '다시 수렴');
+      actions.append(resample, reproject);
       const body = el('div', 'white-space:pre-wrap');
-      host.append(body);
+      host.append(actions, body);
+      const runFor = (command: string) => async () => {
+        const scopeId = scopeOf(context);
+        if (!scopeId) return;
+        try { await context.executeCommand(command as never, { scopeId } as never); }
+        catch (error) { body.textContent = error instanceof Error ? error.message : String(error); }
+      };
+      resample.addEventListener('click', () => { void runFor(COMMANDS.resample)(); });
+      reproject.addEventListener('click', () => { void runFor(COMMANDS.reproject)(); });
       const refresh = () => {
         const scopeId = scopeOf(context);
         if (!scopeId) { body.textContent = '스코프를 선택하세요.'; return; }

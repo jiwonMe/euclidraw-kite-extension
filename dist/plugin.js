@@ -505,14 +505,14 @@ function xe(e) {
 	for (let t of e) r(t);
 	return t;
 }
-function z(e, t, n, r, i, a) {
+function Se(e, t, n, r, i, a) {
 	let o = i - n, s = a - r, c = o * o + s * s, l = c === 0 ? 0 : Math.max(0, Math.min(1, ((e - n) * o + (t - r) * s) / c));
 	return Math.hypot(e - (n + l * o), t - (r + l * s));
 }
-function Se(e, t, n, r, i) {
+function Ce(e, t, n, r, i) {
 	let a = Infinity, o = (e) => {
 		if (e.owner === t) {
-			let t = Ce(e, n, r, i);
+			let t = we(e, n, r, i);
 			t < a && (a = t);
 		}
 		for (let t of e.children ?? []) o(t);
@@ -521,7 +521,7 @@ function Se(e, t, n, r, i) {
 	for (let t of e) o(t);
 	return a;
 }
-function Ce(e, t, n, r) {
+function we(e, t, n, r) {
 	switch (e.shapeType) {
 		case "Circle": {
 			let [i, a] = D(e.props.center);
@@ -533,16 +533,16 @@ function Ce(e, t, n, r) {
 		}
 		case "Line": {
 			let [i, a] = D(e.props.start), [o, s] = D(e.props.end);
-			return z(t, n, i, a, o, s) - r - T(e.props.strokeWidth) / 2;
+			return Se(t, n, i, a, o, s) - r - T(e.props.strokeWidth) / 2;
 		}
 		case "Polygon":
 		case "Polyline": {
 			let i = Array.isArray(e.props.points) ? e.props.points : [], a = Infinity;
 			for (let e = 0; e < i.length; e++) {
 				let r = i[e], o = i[(e + 1) % i.length];
-				a = Math.min(a, z(t, n, Number(r[0]) || 0, Number(r[1]) || 0, Number(o[0]) || 0, Number(o[1]) || 0));
+				a = Math.min(a, Se(t, n, Number(r[0]) || 0, Number(r[1]) || 0, Number(o[0]) || 0, Number(o[1]) || 0));
 			}
-			return e.shapeType === "Polygon" && we(i, t, n) ? -r : a - r;
+			return e.shapeType === "Polygon" && Te(i, t, n) ? -r : a - r;
 		}
 		default: {
 			let i = R(e);
@@ -552,7 +552,7 @@ function Ce(e, t, n, r) {
 		}
 	}
 }
-function we(e, t, n) {
+function Te(e, t, n) {
 	let r = !1;
 	for (let i = 0, a = e.length - 1; i < e.length; a = i++) {
 		let o = Number(e[i][0]) || 0, s = Number(e[i][1]) || 0, c = Number(e[a][0]) || 0, l = Number(e[a][1]) || 0;
@@ -561,12 +561,12 @@ function we(e, t, n) {
 	return r;
 }
 // src/penrose/computed.ts
-var B = /* @__PURE__ */ new WeakMap();
-function Te(e) {
-	let t = B.get(e);
-	return t || (t = xe(e.shapes), B.set(e, t)), t;
+var Ee = /* @__PURE__ */ new WeakMap();
+function De(e) {
+	let t = Ee.get(e);
+	return t || (t = xe(e.shapes), Ee.set(e, t)), t;
 }
-function V(e, t) {
+function z(e, t) {
 	let n = e.getCanonical(t, r);
 	if (n) return {
 		...n,
@@ -585,14 +585,14 @@ function V(e, t) {
 		}
 	};
 }
-function Ee(e) {
+function Oe(e) {
 	return {
 		compiled: {
 			id: p.compiled,
 			symbol: `${c}:compile`,
 			dependsOnCanonical: [r],
 			compute(t, n) {
-				let r = V(n, t);
+				let r = z(n, t);
 				if (!r) return;
 				let i = e.error(t, r);
 				if (i) return {
@@ -649,14 +649,14 @@ function Ee(e) {
 			dependsOnCanonical: [r],
 			dependsOnComputed: [p.compiled],
 			compute(t, n) {
-				let r = V(n, t);
+				let r = z(n, t);
 				if (!r) return;
 				let i = e.layout(t, r);
 				if (i) return {
 					digest: i.digest,
 					canvas: i.canvas,
 					owners: i.owners,
-					bounds: Te(i),
+					bounds: De(i),
 					shapes: i.shapes,
 					labels: i.labels,
 					varyingValues: i.varyingValues,
@@ -670,7 +670,7 @@ function Ee(e) {
 		}
 	};
 }
-function De(e, t, n) {
+function ke(e, t, n) {
 	let r = x(n, t), i = n.getComputed(t, p.layout);
 	if (!r || !i) return;
 	let a = i.bounds[e.ownerKey];
@@ -693,7 +693,7 @@ function De(e, t, n) {
 		rotation: 0
 	};
 }
-function Oe(e, t, n, r, i, a) {
+function Ae(e, t, n, r, i, a) {
 	let o = x(n, t), s = n.getComputed(t, p.layout);
 	if (!o || !s) return Infinity;
 	let c = S(s.canvas, o), l = {
@@ -702,15 +702,15 @@ function Oe(e, t, n, r, i, a) {
 	}, u = {
 		x: l.x - s.canvas.width / 2,
 		y: s.canvas.height / 2 - l.y
-	}, d = 4 / Math.max(a * c.scale, .001), f = Se(s.shapes, e.ownerKey, u.x, u.y, d);
+	}, d = 4 / Math.max(a * c.scale, .001), f = Ce(s.shapes, e.ownerKey, u.x, u.y, d);
 	return f <= 0 ? f : Infinity;
 }
 // src/penrose/aspects.ts
-function ke(e, t, n) {
+function B(e, t, n) {
 	let r = Math.min(520, 24 + n.length * 7.2);
-	return `<g><rect x="${e}" y="${t - 22}" width="${r}" height="22" rx="4" fill="rgba(254,226,226,0.96)" stroke="#dc2626" stroke-width="1"/><text x="${e + 8}" y="${t - 7}" font="12px 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#991b1b">${Ae(n)}</text></g>`;
+	return `<g><rect x="${e}" y="${t - 22}" width="${r}" height="22" rx="4" fill="rgba(254,226,226,0.96)" stroke="#dc2626" stroke-width="1"/><text x="${e + 8}" y="${t - 7}" font="12px 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#991b1b">${V(n)}</text></g>`;
 }
-function Ae(e) {
+function V(e) {
 	return e.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\"", "&quot;");
 }
 function je(e) {
@@ -761,11 +761,11 @@ function je(e) {
 			});
 			return {
 				...r,
-				svg: `<g transform="${ne(o)}" data-penrose-scope="${Ae(t)}">${s}</g>`
+				svg: `<g transform="${ne(o)}" data-penrose-scope="${V(t)}">${s}</g>`
 			};
 		},
 		renderSvg(e, t) {
-			return t ? t.error ? { svg: ke(t.x, t.y, `Penrose: ${t.error}`.slice(0, 140)) } : t.pending && !t.svg ? { svg: ke(t.x, t.y, "Penrose: 컴파일 중…") } : { svg: t.svg ?? "" } : { svg: "" };
+			return t ? t.error ? { svg: B(t.x, t.y, `Penrose: ${t.error}`.slice(0, 140)) } : t.pending && !t.svg ? { svg: B(t.x, t.y, "Penrose: 컴파일 중…") } : { svg: t.svg ?? "" } : { svg: "" };
 		},
 		selection: {
 			priority: 5,
@@ -823,8 +823,8 @@ function Me() {
 		dependsOnCanonical: [i, r],
 		dependsOnComputed: [p.layout],
 		derive(e, t, n) {
-			if (!V(n, e.scopeId)) return;
-			let r = De(e, e.scopeId, n);
+			if (!z(n, e.scopeId)) return;
+			let r = ke(e, e.scopeId, n);
 			if (r) return r;
 			let i = x(n, e.scopeId);
 			if (i) return {
@@ -847,7 +847,7 @@ function Me() {
 			},
 			hitTest(e, t, n, r, a) {
 				let o = t.getCanonical(e, i);
-				return o ? Oe(o, o.scopeId, t, n, r, a) : Infinity;
+				return o ? Ae(o, o.scopeId, t, n, r, a) : Infinity;
 			},
 			intersectsRect(t, n, r, i, a, o) {
 				let s = e(t, n);
@@ -1631,20 +1631,20 @@ var tt = 45, nt = class {
 			this.session === l && (u(t), l.ending = !0, (async () => {
 				l.inflight && await l.inflight;
 				let t = await this.host.runtime.drag(e, l.last, 0);
-				this.session === l && (We(this.host, e, t.varyingValues), this.session = void 0, this.host.runtime.dragging = !1, g(), o.world.invalidateComputed?.(), this.rebuild());
+				this.session === l && (We(this.host, e, t.varyingValues), this.session = void 0, this.host.runtime.dragging = !1, _(), o.world.invalidateComputed?.(), this.rebuild());
 			})());
 		}, f = () => {
 			if (this.session !== l) return;
 			let t = l.baseline;
-			this.session = void 0, this.host.runtime.dragging = !1, g(), this.host.runtime.restore(e, t).then(() => {
+			this.session = void 0, this.host.runtime.dragging = !1, _(), this.host.runtime.restore(e, t).then(() => {
 				o.world.invalidateComputed?.(), this.rebuild();
 			});
 		}, m = (e) => {
 			e.key === "Escape" && f();
-		}, h = () => f(), g = () => {
-			window.removeEventListener("pointermove", u), window.removeEventListener("pointerup", d), window.removeEventListener("pointercancel", f), window.removeEventListener("keydown", m), window.removeEventListener("blur", h);
+		}, h = () => f(), g = () => f(), _ = () => {
+			window.removeEventListener("pointermove", u), window.removeEventListener("pointerup", d), window.removeEventListener("pointercancel", f), window.removeEventListener("keydown", m), window.removeEventListener("blur", h), window.removeEventListener("compositionstart", g);
 		};
-		window.addEventListener("pointermove", u), window.addEventListener("pointerup", d), window.addEventListener("pointercancel", f), window.addEventListener("keydown", m), window.addEventListener("blur", h);
+		window.addEventListener("pointermove", u), window.addEventListener("pointerup", d), window.addEventListener("pointercancel", f), window.addEventListener("keydown", m), window.addEventListener("blur", h), window.addEventListener("compositionstart", g);
 	}
 	targetsFor(e, t) {
 		let { input: n, kind: r } = e.target, { baseline: i, startCanvas: a } = e;
@@ -1808,23 +1808,38 @@ function ot() {
 		defaultZone: "right",
 		mount(e, t) {
 			e.setAttribute("style", `padding:8px;font:${rt};min-width:280px;height:100%;box-sizing:border-box;overflow:auto`);
-			let n = X("div", "white-space:pre-wrap");
-			e.append(n);
-			let r = () => {
+			let n = X("div", "display:flex;gap:6px;margin-bottom:8px"), r = X("button", "padding:2px 8px;font:inherit;cursor:pointer", "재표본"), i = X("button", "padding:2px 8px;font:inherit;cursor:pointer", "다시 수렴");
+			n.append(r, i);
+			let a = X("div", "white-space:pre-wrap");
+			e.append(n, a);
+			let o = (e) => async () => {
+				let n = it(t);
+				if (n) try {
+					await t.executeCommand(e, { scopeId: n });
+				} catch (e) {
+					a.textContent = e instanceof Error ? e.message : String(e);
+				}
+			};
+			r.addEventListener("click", () => {
+				o(g.resample)();
+			}), i.addEventListener("click", () => {
+				o(g.reproject)();
+			});
+			let s = () => {
 				let e = it(t);
 				if (!e) {
-					n.textContent = "스코프를 선택하세요.";
+					a.textContent = "스코프를 선택하세요.";
 					return;
 				}
-				let r = Z(t, e), i = t.world.getComputed(e, p.compiled), a = t.world.getComputed(e, p.layout), o = [];
-				if (o.push(`digest: ${r?.topologyDigest || "—"}`), o.push(`variation: ${r?.variation ?? "—"}`), i?.pending ? o.push("상태: 컴파일 중") : i && !i.ok ? o.push(`상태: 오류 — ${i.error ?? "DSL 오류"}`) : o.push("상태: 준비됨"), i) {
-					o.push(`owners: ${i.owners.length} · inputs: ${i.varyingValues.length}`), o.push(`translatable: ${i.interactivity.translatable.length} · scalable: ${i.interactivity.scalable.length}`);
-					for (let e of i.diagnostics.slice(0, 8)) o.push(`  ${e.source} L${e.line}: ${e.message}`);
+				let n = Z(t, e), r = t.world.getComputed(e, p.compiled), i = t.world.getComputed(e, p.layout), o = [];
+				if (o.push(`digest: ${n?.topologyDigest || "—"}`), o.push(`variation: ${n?.variation ?? "—"}`), r?.pending ? o.push("상태: 컴파일 중") : r && !r.ok ? o.push(`상태: 오류 — ${r.error ?? "DSL 오류"}`) : o.push("상태: 준비됨"), r) {
+					o.push(`owners: ${r.owners.length} · inputs: ${r.varyingValues.length}`), o.push(`translatable: ${r.interactivity.translatable.length} · scalable: ${r.interactivity.scalable.length}`);
+					for (let e of r.diagnostics.slice(0, 8)) o.push(`  ${e.source} L${e.line}: ${e.message}`);
 				}
-				a && (o.push(`단계: ${a.stages} · 에너지: ${a.energy.toFixed(4)}`), o.push(`shapes: ${a.shapes.length}`), o.push(`pins: ${r?.pins.length ?? 0}`)), n.textContent = o.join("\n");
-			}, i = t.onSelectionChange(r), a = t.onWorldMutated(r);
-			return r(), () => {
-				i(), a();
+				i && (o.push(`단계: ${i.stages} · 에너지: ${i.energy.toFixed(4)}`), o.push(`shapes: ${i.shapes.length}`), o.push(`pins: ${n?.pins.length ?? 0}`)), a.textContent = o.join("\n");
+			}, c = t.onSelectionChange(s), l = t.onWorldMutated(s);
+			return s(), () => {
+				c(), l();
 			};
 		}
 	};
@@ -2117,7 +2132,7 @@ var ut = class {
 		}, o = (t) => {
 			let n = e.world.registerComputed?.(t);
 			n && r.push(n);
-		}, s = Ee(i);
+		}, s = Oe(i);
 		o(s.compiled), o(s.layout);
 		for (let t of et(a)) r.push(e.commands.register(t));
 		let c = new nt(a);

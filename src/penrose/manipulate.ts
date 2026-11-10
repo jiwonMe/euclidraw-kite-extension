@@ -240,6 +240,8 @@ export class PenroseManipulator {
     };
     const onKey = (key: KeyboardEvent) => { if (key.key === 'Escape') onCancel(); };
     const onBlur = () => onCancel();
+    // IME composition takes over the keyboard; never fight it.
+    const onComposition = () => onCancel();
 
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove);
@@ -247,12 +249,14 @@ export class PenroseManipulator {
       window.removeEventListener('pointercancel', onCancel);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('compositionstart', onComposition);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
     window.addEventListener('keydown', onKey);
     window.addEventListener('blur', onBlur);
+    window.addEventListener('compositionstart', onComposition);
   }
 
   private targetsFor(session: DragSession, canvas: { x: number; y: number }): { index: number; value: number }[] {
