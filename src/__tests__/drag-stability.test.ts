@@ -38,6 +38,10 @@ suite('large diagram drag stability', () => {
       styleDsl: fixture('sys.style'),
     });
     await settle(host);
+    // A canvas change resizes the scope box so the diagram is not squeezed.
+    const bounds = host.world.getCanonical(scopeId, 'core.bounds');
+    expect(bounds.width).toBeCloseTo(1000, 0);
+    expect(bounds.height).toBeCloseTo(1000, 0);
     host.select([scopeId]);
     host.paint();
     const before = componentCentres(host, scopeId);

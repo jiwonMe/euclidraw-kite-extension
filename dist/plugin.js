@@ -1105,20 +1105,39 @@ async function Ge(e, t, n, i = "apply-dsl") {
 		let { compiled: e, layout: n } = await s.apply(t, u, d, l.pins), o = {
 			...l.entityBindings,
 			...J(c.getCanonicalView(), t)
-		}, p = c.getCanonical(t, "core.stacking")?.order ?? "V", m = He(c, t, e.owners, o, p);
-		return G(a, i, [...m.ops, {
+		}, p = c.getCanonical(t, "core.stacking")?.order ?? "V", m = He(c, t, e.owners, o, p), h = x(c.getCanonicalView(), t), g = n.canvas, _ = h && g.width > 1 && g.height > 1 && (Math.abs(h.width - g.width) > .5 || Math.abs(h.height - g.height) > .5) && h ? [{
 			id: t,
-			aspect: r,
+			aspect: "core.transform",
 			patch: {
-				schemaVersion: 2,
-				...u,
-				variation: d,
-				topologyDigest: e.digest,
-				varyingValues: [...n.varyingValues],
-				entityBindings: m.bindings,
-				solverConfig: f
+				x: h.x + (h.width - g.width) / 2,
+				y: h.y + (h.height - g.height) / 2,
+				rotation: h.rotation
 			}
-		}]), {
+		}, {
+			id: t,
+			aspect: "core.bounds",
+			patch: {
+				width: g.width,
+				height: g.height
+			}
+		}] : [];
+		return G(a, i, [
+			...m.ops,
+			..._,
+			{
+				id: t,
+				aspect: r,
+				patch: {
+					schemaVersion: 2,
+					...u,
+					variation: d,
+					topologyDigest: e.digest,
+					varyingValues: [...n.varyingValues],
+					entityBindings: m.bindings,
+					solverConfig: f
+				}
+			}
+		]), {
 			ok: !0,
 			digest: e.digest,
 			owners: e.owners,

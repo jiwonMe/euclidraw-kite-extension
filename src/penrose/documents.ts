@@ -12,6 +12,7 @@ import { COMPUTED, EXTENSION_ID } from '../manifest.ts';
 import { DEFAULT_SCOPE_SIZE, DEFAULT_SOURCE } from './defaults.ts';
 import type { PenroseRuntime } from './runtime.ts';
 import { DEFAULT_SOLVER_CONFIG, MEMBER_ASPECT, SCOPE_ASPECT, readSolverConfig, type PenroseMemberAspect, type PenroseScopeAspect, type ScopeSource } from './schema.ts';
+import { readScopeBox } from './frame.ts';
 import { type CompiledScope, type SolvedLayout } from './computed.ts';
 
 /**
@@ -258,8 +259,19 @@ export async function applySource(host: PenroseHost, scopeId: EntityId, next: Ap
     const existing = { ...scope.entityBindings, ...scopeMembers(world.getCanonicalView(), scopeId) };
     const scopeKey = world.getCanonical<{ order?: string }>(scopeId, 'core.stacking')?.order ?? 'V';
     const plan = planMembers(world, scopeId, compiled.owners, existing, scopeKey);
+    // A trio can change the Penrose canvas. Match the scope box to it while
+    // keeping the centre, otherwise the diagram is squeezed and clipped.
+    const box = readScopeBox(world.getCanonicalView(), scopeId);
+    const canvas = layout.canvas;
+    const resize = box && canvas.width > 1 && canvas.height > 1
+      && (Math.abs(box.width - canvas.width) > 0.5 || Math.abs(box.height - canvas.height) > 0.5);
+    const resizeOps: CanonicalPatchOp[] = resize && box ? [
+      { id: scopeId, aspect: 'core.transform', patch: { x: box.x + (box.width - canvas.width) / 2, y: box.y + (box.height - canvas.height) / 2, rotation: box.rotation } },
+      { id: scopeId, aspect: 'core.bounds', patch: { width: canvas.width, height: canvas.height } },
+    ] : [];
     commit(context, name, [
       ...plan.ops,
+      ...resizeOps,
       {
         id: scopeId,
         aspect: SCOPE_ASPECT,

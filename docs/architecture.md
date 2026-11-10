@@ -29,6 +29,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - `layout`은 워커가 계산한 `Shape[]`(평면 데이터)와 라벨 SVG를 캐시에서 읽습니다.
 - 멤버 기하는 `layout.bounds[ownerKey]`를 스코프 프레임으로 월드에 사상한 값입니다.
 - 프레임 이동·크기·회전은 `core.transform`/`core.bounds`만 바꾸므로 컴파일·최적화를 다시 돌리지 않습니다.
+- trio를 적용했을 때 Penrose canvas 크기가 바뀌면(예: 1000×1000) 스코프의 `core.bounds`를 캔버스 크기로 맞추고 중심을 유지합니다. 그렇지 않으면 도해가 작은 프레임에 눌려 찌그러지고 잘립니다.
 
 ### 모드
 

@@ -26,7 +26,7 @@
   "title": "Penrose Studio",
   "summary": "Penrose Domain · Substance · Style과 최적화 엔진을 내장해, 자유도가 있는 도해를 캔버스에서 직접 움직입니다.",
   "entry": "dist/plugin.js",
-  "sha256": "7efd05dcaad32e4075b7fbe21576719e9dac0938d995712a6de869956aaad4fc",
+  "sha256": "cb20a3e557add9c155e60beb5ac8cec28ae8f16e88b92882d1c46b55624a41fd",
   "aspectIds": [
     "penrose.scope",
     "penrose.member"
