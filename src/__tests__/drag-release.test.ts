@@ -39,6 +39,6 @@ suite('drag release', () => {
       if (d > max) { max = d; maxName = s.name; }
     }
     console.log('max displacement', max.toFixed(2), maxName, 'energy', energyBefore.toFixed(1), '->', host.world.getComputed(scopeId, 'computed.penrose.layout').energy.toFixed(1));
-    expect(max).toBeLessThan(20);
+    expect(max).toBeLessThan(10);
   });
 });

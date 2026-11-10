@@ -402,7 +402,13 @@ export class PenroseManipulator {
     };
     const onUp = (up: PointerEvent) => {
       if (this.session !== session) return;
-      onMove(up);
+      // Record the final pointer position without launching another budgeted
+      // drag frame; the release itself must not move the diagram.
+      const world = { x: 0, y: 0 };
+      surface.host.screenToWorld(up.clientX, up.clientY, world);
+      const canvas = this.canvasOfWorld(frame, world);
+      if (session.target.kind === 'computed') session.preview = canvas;
+      else session.last = this.targetsFor(session, canvas);
       session.ending = true;
       const finish = async () => {
         if (session.inflight) await session.inflight;

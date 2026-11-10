@@ -683,6 +683,7 @@ export function dragPointSession(
   const handle = session.computed.find(entry => entry.id === handleId);
   if (!handle) return layoutOf(session);
   const beforeLabels = labelSnapshot(session.state);
+  const beforeEnergy = evalEnergy(session.state);
   let state = session.state;
   for (let round = 0; round < 2; round++) {
     let shapes: Map<string, AnyShape>;
@@ -716,6 +717,7 @@ export function dragPointSession(
     }
   } catch { /* keep the converged state */ }
   followLabels(state, beforeLabels, state);
+  if (evalEnergy(state) > beforeEnergy * 8 + 1e6) state = session.state;
   session.state = state;
   return layoutOf(session);
 }
@@ -815,9 +817,12 @@ function settleForDrag(state: PenroseState, steps: number, budgetMs = 0): Penros
   // 1e8 is the highest weight where L-BFGS still takes steps for label
   // objectives; at the final EP weight (1e9) the preconditioned convergence
   // check stops immediately and AutoLabel freezes during the drag.
-  const DRAG_WEIGHT = 1e8;
+  // Large diagrams need a softer weight: very stiff objectives plus a
+  // time-budgeted step can blow up the arrow stage.
+  const count = state.varyingValues.length;
+  const DRAG_WEIGHT = count > 250 ? 1e5 : count > 120 ? 1e7 : 1e8;
   const params = {
-    ...start(state.varyingValues.length),
+    ...start(count),
     weight: Math.min(state.params.weight, DRAG_WEIGHT),
   } as PenroseState['params'];
   const restarted: PenroseState = { ...state, params };
@@ -842,6 +847,7 @@ export function dragSession(
   budgetMs = 0,
 ): WireLayout {
   const beforeLabels = labelSnapshot(session.state);
+  const beforeEnergy = evalEnergy(session.state);
   const values = [...session.state.varyingValues];
   for (const target of targets) {
     if (target.index >= 0 && target.index < values.length) values[target.index] = target.value;
@@ -862,6 +868,16 @@ export function dragSession(
     state = { ...state, varyingValues: pinned };
   }
   followLabels(state, beforeLabels, state);
+  // Never let one frame explode the diagram; keep the dragged input at the
+  // pointer and let the next frame try again.
+  if (evalEnergy(state) > beforeEnergy * 8 + 1e6) {
+    const safeValues = [...session.state.varyingValues];
+    for (const target of targets) {
+      if (target.index >= 0 && target.index < safeValues.length) safeValues[target.index] = target.value;
+    }
+    state = { ...session.state, varyingValues: safeValues };
+    followLabels(state, beforeLabels, state);
+  }
   session.state = state;
   return layoutOf(session);
 }
@@ -884,6 +900,7 @@ export function polishSession(session: CoreSession, options: PolishOptions = {})
   const { maxSteps = 4000, budgetMs = 0, pins = [] } = options;
   const beforeLabels = labelSnapshot(session.state);
   const state = session.state;
+  const beforeEnergy = evalEnergy(state);
   const restarted: PenroseState = {
     ...state,
     params: { ...start(state.varyingValues.length), weight: Math.min(state.params.weight, 1e8) } as PenroseState['params'],
@@ -904,7 +921,14 @@ export function polishSession(session: CoreSession, options: PolishOptions = {})
     for (const pin of pins) if (pin.index >= 0 && pin.index < values.length) values[pin.index] = pin.value;
     polished = { ...polished, varyingValues: values };
   }
-  followLabels(polished, beforeLabels, polished);
+  // A polish pass must never make the diagram worse; otherwise keep the drag
+  // preview as-is instead of jumping on release.
+  const afterEnergy = evalEnergy(polished);
+  if (afterEnergy > beforeEnergy + 1e-6) {
+    polished = state;
+  } else {
+    followLabels(polished, beforeLabels, polished);
+  }
   session.state = polished;
   session.compiled = compiledOf(session);
   session.computed = buildComputedHandles(session);
