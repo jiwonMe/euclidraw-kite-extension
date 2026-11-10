@@ -22,6 +22,14 @@ interface DragSession {
   preview?: { x: number; y: number };
   inflight?: Promise<void>;
   ending: boolean;
+  /** Raw pointer target and the eased target actually sent to the worker. */
+  raw?: { x: number; y: number };
+  smooth?: { x: number; y: number };
+  sent?: { x: number; y: number };
+  releasing: boolean;
+  releasedAt: number;
+  ticker?: ReturnType<typeof setInterval>;
+  finalizing: boolean;
 }
 
 const HANDLE_PRIORITY = 45;
@@ -381,12 +389,19 @@ export class PenroseManipulator {
     if (!layout) return;
     const start = { x: 0, y: 0 };
     surface.host.screenToWorld(event.clientX, event.clientY, start);
+    const startCanvas = this.canvasOfWorld(frame, start);
     const session: DragSession = {
       target: { scopeId, frame, ...target },
       baseline: [...layout.varyingValues],
-      startCanvas: this.canvasOfWorld(frame, start),
+      startCanvas,
       last: [],
       ending: false,
+      raw: { ...startCanvas },
+      smooth: { ...startCanvas },
+      sent: { ...startCanvas },
+      releasing: false,
+      releasedAt: 0,
+      finalizing: false,
     };
     this.session = session;
     this.host.runtime.dragging = true;
@@ -395,22 +410,27 @@ export class PenroseManipulator {
       if (this.session !== session) return;
       const world = { x: 0, y: 0 };
       surface.host.screenToWorld(move.clientX, move.clientY, world);
-      const canvas = this.canvasOfWorld(frame, world);
-      if (session.target.kind === 'computed') session.preview = canvas;
-      else session.last = this.targetsFor(session, canvas);
-      void this.flush(session);
+      session.raw = this.canvasOfWorld(frame, world);
     };
     const onUp = (up: PointerEvent) => {
       if (this.session !== session) return;
-      // Record the final pointer position without launching another budgeted
-      // drag frame; the release itself must not move the diagram.
       const world = { x: 0, y: 0 };
       surface.host.screenToWorld(up.clientX, up.clientY, world);
-      const canvas = this.canvasOfWorld(frame, world);
-      if (session.target.kind === 'computed') session.preview = canvas;
-      else session.last = this.targetsFor(session, canvas);
+      session.raw = this.canvasOfWorld(frame, world);
+      session.releasing = true;
+      session.releasedAt = performance.now();
       session.ending = true;
-      const finish = async () => {
+    };
+    const finalize = async () => {
+        if (session.finalizing) return;
+        session.finalizing = true;
+        if (session.ticker) clearInterval(session.ticker);
+        // The drop position is the pointer, not the eased preview.
+        if (session.raw) {
+          if (session.target.kind === 'computed') session.preview = { ...session.raw };
+          else session.last = this.targetsFor(session, session.raw);
+        }
+        {
         if (session.inflight) await session.inflight;
         const result = session.target.kind === 'computed' && session.target.computedId
           ? await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0, 0)
@@ -436,14 +456,14 @@ export class PenroseManipulator {
         cleanup();
         (context.world as { invalidateComputed?(): void }).invalidateComputed?.();
         this.rebuild();
-      };
-      void finish();
+        }
     };
     const onCancel = () => {
       if (this.session !== session) return;
       const saved = session.baseline;
       this.session = undefined;
       this.host.runtime.dragging = false;
+      if (session.ticker) clearInterval(session.ticker);
       cleanup();
       void this.host.runtime.restore(scopeId, saved).then(() => {
         (context.world as { invalidateComputed?(): void }).invalidateComputed?.();
@@ -469,6 +489,31 @@ export class PenroseManipulator {
     window.addEventListener('keydown', onKey);
     window.addEventListener('blur', onBlur);
     window.addEventListener('compositionstart', onComposition);
+
+    // Ease the pointer target (ease-in at press, ease-out on release) instead
+    // of feeding raw pointer jumps to the optimizer.
+    const EASE_MS = 55;
+    let lastTick = performance.now();
+    session.ticker = setInterval(() => {
+      if (this.session !== session || !session.raw || !session.smooth) return;
+      const now = performance.now();
+      const dt = Math.min(32, Math.max(1, now - lastTick));
+      lastTick = now;
+      const alpha = 1 - Math.exp(-dt / EASE_MS);
+      session.smooth = {
+        x: session.smooth.x + (session.raw.x - session.smooth.x) * alpha,
+        y: session.smooth.y + (session.raw.y - session.smooth.y) * alpha,
+      };
+      const moved = !session.sent || Math.hypot(session.smooth.x - session.sent.x, session.smooth.y - session.sent.y) > 0.02;
+      if (moved) {
+        session.sent = { ...session.smooth };
+        if (session.target.kind === 'computed') session.preview = { ...session.smooth };
+        else session.last = this.targetsFor(session, session.smooth);
+        void this.flush(session);
+      }
+      const remaining = Math.hypot(session.raw.x - session.smooth.x, session.raw.y - session.smooth.y);
+      if (session.releasing && (remaining < 0.5 || now - session.releasedAt > 320)) void finalize();
+    }, 16);
   }
 
   private targetsFor(session: DragSession, canvas: { x: number; y: number }): { index: number; value: number }[] {

@@ -22,12 +22,12 @@ suite('drag release', () => {
     host.select([scopeId]); host.paint();
     const h = host.gizmoHandles().find(x => x.id.includes(':move:`LA`.dot'))!;
     host.press(h.x, h.y);
-    for (let i = 1; i <= 3; i++) { host.pointer('pointermove', h.x + i * 12, h.y); await new Promise(r => setTimeout(r, 70)); }
+    for (let i = 1; i <= 3; i++) { host.pointer('pointermove', h.x + i * 12, h.y); await new Promise(r => setTimeout(r, 200)); }
     host.paint();
     const before = centers(host, scopeId);
     const energyBefore = host.world.getComputed(scopeId, 'computed.penrose.layout').energy;
     host.pointer('pointerup', h.x + 36, h.y);
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 600));
     host.paint();
     const after = centers(host, scopeId);
     const map = new Map(after.map((s: any) => [s.name, s]));

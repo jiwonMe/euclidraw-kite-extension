@@ -372,40 +372,40 @@ function pe(e, t) {
 	let [n, r] = N(t, D(e.props.center)), i = T(e.props.height), a = T(e.props.descent), o = r + i / 2 - a, s = T(e.props.rotation), c = s ? ` transform="rotate(${O(s)} ${O(n)} ${O(o)})"` : "", l = E(e.props.textAnchor, "middle") || "middle", u = E(e.props.string), d = u.split("\n"), f = d.length > 1 ? d.map((t, r) => `<tspan x="${O(n)}" dy="${r === 0 ? 0 : O(Number.parseFloat(E(e.props.fontSize, "14")) * 1.2)}">${w(t)}</tspan>`).join("") : w(u);
 	return `<text x="${O(n)}" y="${O(o)}" font="${w(fe(e))}" text-anchor="${w(l)}" dominant-baseline="alphabetic"${P(e)}${F(e)}${c}${M(e)}>${f}</text>`;
 }
-function me(e) {
+function z(e) {
 	return e.replace(/<\s*(script|foreignObject|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "").replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*\/?>/gi, "").replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "").replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "").replace(/javascript:/gi, "");
 }
-function he(e, t) {
+function me(e, t) {
 	let n = t.canvas, [r, i] = N(n, D(e.props.center)), a = Math.max(0, T(e.props.width)), o = Math.max(0, T(e.props.height)), s = T(e.props.rotation), c = `translate(${O(r - a / 2)} ${O(i - o / 2)})` + (s ? ` rotate(${O(s)} ${O(a / 2)} ${O(o / 2)})` : ""), l = t.labels?.[e.name];
 	if (!l) {
 		let t = w(E(e.props.string));
 		return `<text x="${O(r)}" y="${O(i + o / 2 - T(e.props.descent))}" text-anchor="middle"${P(e)}${M(e)}>${t}</text>`;
 	}
-	return `<g transform="${c}"${P(e)}>${me(l)}</g>`;
+	return `<g transform="${c}"${P(e)}>${z(l)}</g>`;
 }
-function ge(e, t) {
+function he(e, t) {
 	let n = E(e.props.href);
 	if (!n.startsWith("data:image/")) return "";
 	let [r, i] = N(t, D(e.props.center)), a = Math.max(0, T(e.props.width)), o = Math.max(0, T(e.props.height)), s = T(e.props.rotation), c = `translate(${O(r - a / 2)} ${O(i - o / 2)})` + (s ? ` rotate(${O(s)} ${O(a / 2)} ${O(o / 2)})` : "");
 	if (n.startsWith("data:image/svg+xml")) try {
-		return `<g transform="${c}">${me(decodeURIComponent(n.slice(18).replace(/^[;,]+/, ""))).replace(/<svg\b([^>]*)>/, (e, t) => `<svg${t.replace(/\s(width|height|x|y)=("[^"]*"|'[^']*')/gi, "").replace(/\sviewBox=("[^"]*"|'[^']*')/gi, "")} width="${O(a)}" height="${O(o)}" preserveAspectRatio="xMidYMid meet">`)}</g>`;
+		return `<g transform="${c}">${z(decodeURIComponent(n.slice(18).replace(/^[;,]+/, ""))).replace(/<svg\b([^>]*)>/, (e, t) => `<svg${t.replace(/\s(width|height|x|y)=("[^"]*"|'[^']*')/gi, "").replace(/\sviewBox=("[^"]*"|'[^']*')/gi, "")} width="${O(a)}" height="${O(o)}" preserveAspectRatio="xMidYMid meet">`)}</g>`;
 	} catch {
 		return "";
 	}
 	return `<image href="${w(n)}" x="0" y="0" width="${O(a)}" height="${O(o)}" transform="${c}" preserveAspectRatio="${w(E(e.props.preserveAspectRatio, "xMidYMid meet"))}"/>`;
 }
-function _e(e, t) {
+function ge(e, t) {
 	let n = e.children ?? [], r = e.clip, i = "<g>", a;
-	r && r.length && (a = `${t.idPrefix ?? "penrose"}-${e.name.replace(/[^\w-]/g, "_")}-clip`, i += `<clipPath id="${w(a)}">${r.map((e) => z(e, t)).join("")}</clipPath>`);
+	r && r.length && (a = `${t.idPrefix ?? "penrose"}-${e.name.replace(/[^\w-]/g, "_")}-clip`, i += `<clipPath id="${w(a)}">${r.map((e) => B(e, t)).join("")}</clipPath>`);
 	let o = r && r.length ? r[0]?.name : void 0;
 	for (let e of n) {
 		if (o && e.name === o) continue;
-		let n = z(e, t);
+		let n = B(e, t);
 		i += a ? `<g clip-path="url(#${w(a)})">${n}</g>` : n;
 	}
 	return i + M(e) + "</g>";
 }
-function z(e, t) {
+function B(e, t) {
 	switch (e.shapeType) {
 		case "Circle": return oe(e, t.canvas);
 		case "Ellipse": return se(e, t.canvas);
@@ -415,16 +415,16 @@ function z(e, t) {
 		case "Rectangle": return le(e, t.canvas);
 		case "Path": return de(e, t.canvas);
 		case "Text": return pe(e, t.canvas);
-		case "Equation": return he(e, t);
-		case "Image": return ge(e, t.canvas);
-		case "Group": return _e(e, t);
+		case "Equation": return me(e, t);
+		case "Image": return he(e, t.canvas);
+		case "Group": return ge(e, t);
 		default: return "";
 	}
 }
-function ve(e, t) {
-	return e.map((e) => z(e, t)).join("");
+function _e(e, t) {
+	return e.map((e) => B(e, t)).join("");
 }
-function B(e) {
+function V(e) {
 	let t = Math.max(0, T(e.props.strokeWidth)) / 2, n = Infinity, r = Infinity, i = -Infinity, a = -Infinity, o = (e, t, o = 0) => {
 		n = Math.min(n, e - o), i = Math.max(i, e + o), r = Math.min(r, t - o), a = Math.max(a, t + o);
 	};
@@ -469,7 +469,7 @@ function B(e) {
 		}
 		case "Group":
 			for (let t of e.children ?? []) {
-				let e = B(t);
+				let e = V(t);
 				e && (o(e.x, e.y), o(e.x + e.width, e.y + e.height));
 			}
 			break;
@@ -482,7 +482,7 @@ function B(e) {
 		height: Math.max(.001, a - r + t * 2)
 	};
 }
-function ye(e) {
+function ve(e) {
 	let t = {}, n = (e, n) => {
 		let r = t[e];
 		if (!r) {
@@ -498,7 +498,7 @@ function ye(e) {
 		};
 	}, r = (e) => {
 		if (e.owner) {
-			let t = B(e);
+			let t = V(e);
 			t && n(e.owner, t);
 		}
 		for (let t of e.children ?? []) r(t);
@@ -507,14 +507,14 @@ function ye(e) {
 	for (let t of e) r(t);
 	return t;
 }
-function be(e, t, n, r, i, a) {
+function ye(e, t, n, r, i, a) {
 	let o = i - n, s = a - r, c = o * o + s * s, l = c === 0 ? 0 : Math.max(0, Math.min(1, ((e - n) * o + (t - r) * s) / c));
 	return Math.hypot(e - (n + l * o), t - (r + l * s));
 }
-function xe(e, t, n, r, i) {
+function be(e, t, n, r, i) {
 	let a = Infinity, o = (e) => {
 		if (e.owner === t) {
-			let t = Se(e, n, r, i);
+			let t = xe(e, n, r, i);
 			t < a && (a = t);
 		}
 		for (let t of e.children ?? []) o(t);
@@ -523,7 +523,7 @@ function xe(e, t, n, r, i) {
 	for (let t of e) o(t);
 	return a;
 }
-function Se(e, t, n, r) {
+function xe(e, t, n, r) {
 	switch (e.shapeType) {
 		case "Circle": {
 			let [i, a] = D(e.props.center);
@@ -535,26 +535,26 @@ function Se(e, t, n, r) {
 		}
 		case "Line": {
 			let [i, a] = D(e.props.start), [o, s] = D(e.props.end);
-			return be(t, n, i, a, o, s) - r - T(e.props.strokeWidth) / 2;
+			return ye(t, n, i, a, o, s) - r - T(e.props.strokeWidth) / 2;
 		}
 		case "Polygon":
 		case "Polyline": {
 			let i = Array.isArray(e.props.points) ? e.props.points : [], a = Infinity;
 			for (let e = 0; e < i.length; e++) {
 				let r = i[e], o = i[(e + 1) % i.length];
-				a = Math.min(a, be(t, n, Number(r[0]) || 0, Number(r[1]) || 0, Number(o[0]) || 0, Number(o[1]) || 0));
+				a = Math.min(a, ye(t, n, Number(r[0]) || 0, Number(r[1]) || 0, Number(o[0]) || 0, Number(o[1]) || 0));
 			}
-			return e.shapeType === "Polygon" && Ce(i, t, n) ? -r : a - r;
+			return e.shapeType === "Polygon" && Se(i, t, n) ? -r : a - r;
 		}
 		default: {
-			let i = B(e);
+			let i = V(e);
 			if (!i) return Infinity;
 			let a = Math.max(i.x - t, 0, t - (i.x + i.width)), o = Math.max(i.y - n, 0, n - (i.y + i.height));
 			return Math.hypot(a, o) - r;
 		}
 	}
 }
-function Ce(e, t, n) {
+function Se(e, t, n) {
 	let r = !1;
 	for (let i = 0, a = e.length - 1; i < e.length; a = i++) {
 		let o = Number(e[i][0]) || 0, s = Number(e[i][1]) || 0, c = Number(e[a][0]) || 0, l = Number(e[a][1]) || 0;
@@ -563,12 +563,12 @@ function Ce(e, t, n) {
 	return r;
 }
 // src/penrose/computed.ts
-var we = /* @__PURE__ */ new WeakMap();
-function Te(e) {
-	let t = we.get(e);
-	return t || (t = ye(e.shapes), we.set(e, t)), t;
+var Ce = /* @__PURE__ */ new WeakMap();
+function we(e) {
+	let t = Ce.get(e);
+	return t || (t = ve(e.shapes), Ce.set(e, t)), t;
 }
-function V(e, t) {
+function H(e, t) {
 	let n = e.getCanonical(t, r);
 	if (n) return {
 		...n,
@@ -587,14 +587,14 @@ function V(e, t) {
 		}
 	};
 }
-function Ee(e) {
+function Te(e) {
 	return {
 		compiled: {
 			id: p.compiled,
 			symbol: `${c}:compile`,
 			dependsOnCanonical: [r],
 			compute(t, n) {
-				let r = V(n, t);
+				let r = H(n, t);
 				if (!r) return;
 				let i = e.error(t, r);
 				if (i) return {
@@ -651,14 +651,14 @@ function Ee(e) {
 			dependsOnCanonical: [r],
 			dependsOnComputed: [p.compiled],
 			compute(t, n) {
-				let r = V(n, t);
+				let r = H(n, t);
 				if (!r) return;
 				let i = e.layout(t, r);
 				if (i) return {
 					digest: i.digest,
 					canvas: i.canvas,
 					owners: i.owners,
-					bounds: Te(i),
+					bounds: we(i),
 					shapes: i.shapes,
 					computed: i.computed,
 					labels: i.labels,
@@ -673,7 +673,7 @@ function Ee(e) {
 		}
 	};
 }
-function De(e, t, n) {
+function Ee(e, t, n) {
 	let r = x(n, t), i = n.getComputed(t, p.layout);
 	if (!r || !i) return;
 	let a = i.bounds[e.ownerKey];
@@ -696,7 +696,7 @@ function De(e, t, n) {
 		rotation: 0
 	};
 }
-function Oe(e, t, n, r, i, a) {
+function De(e, t, n, r, i, a) {
 	let o = x(n, t), s = n.getComputed(t, p.layout);
 	if (!o || !s) return Infinity;
 	let c = S(s.canvas, o), l = {
@@ -705,19 +705,19 @@ function Oe(e, t, n, r, i, a) {
 	}, u = {
 		x: l.x - s.canvas.width / 2,
 		y: s.canvas.height / 2 - l.y
-	}, d = 4 / Math.max(a * c.scale, .001), f = xe(s.shapes, e.ownerKey, u.x, u.y, d);
+	}, d = 4 / Math.max(a * c.scale, .001), f = be(s.shapes, e.ownerKey, u.x, u.y, d);
 	return f <= 0 ? f : Infinity;
 }
 // src/penrose/aspects.ts
-function ke(e, t, n) {
+function Oe(e, t, n) {
 	let r = Math.min(520, 24 + n.length * 7.2);
-	return `<g><rect x="${e}" y="${t - 22}" width="${r}" height="22" rx="4" fill="rgba(254,226,226,0.96)" stroke="#dc2626" stroke-width="1"/><text x="${e + 8}" y="${t - 7}" font="12px 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#991b1b">${H(n)}</text></g>`;
+	return `<g><rect x="${e}" y="${t - 22}" width="${r}" height="22" rx="4" fill="rgba(254,226,226,0.96)" stroke="#dc2626" stroke-width="1"/><text x="${e + 8}" y="${t - 7}" font="12px 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#991b1b">${Ae(n)}</text></g>`;
 }
-function Ae(e) {
+function ke(e) {
 	let t = Math.max(96, Math.min(124, e.width - 16)), n = e.x + e.width / 2, r = e.y + e.height / 2, i = n - t / 2, a = r - 13, o = i + 18, s = 5.5;
 	return `<g data-penrose-pending="1" opacity="0.95"><rect x="${i}" y="${a}" width="${t}" height="26" rx="13" fill="rgba(148,163,184,0.10)" stroke="rgba(148,163,184,0.32)" stroke-width="1"/><circle cx="${o}" cy="${r}" r="${s}" fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="2"/><path d="M${o} ${r - s} A${s} ${s} 0 0 1 ${o + s} ${r}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><text x="${i + 30}" y="${r}" dominant-baseline="middle" font="11px 'Helvetica Neue', Helvetica, Arial, sans-serif" letter-spacing="0.2" fill="#94a3b8">컴파일 중</text></g>`;
 }
-function H(e) {
+function Ae(e) {
 	return e.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\"", "&quot;");
 }
 var je = { paths: ["M3 8a5 5 0 1 1 1.5 3.5", "M3 4v4h4"] }, Me = { paths: ["M8 2.5a5.5 5.5 0 1 1-5.2 7.3", "M8 5.5v5M5.5 8h5"] };
@@ -762,18 +762,18 @@ function Ne(e) {
 				...r,
 				pending: !0
 			};
-			let o = S(a.canvas, r), s = ve(a.shapes, {
+			let o = S(a.canvas, r), s = _e(a.shapes, {
 				canvas: a.canvas,
 				labels: a.labels,
 				idPrefix: t
 			}), c = `<svg x="0" y="0" width="${a.canvas.width}" height="${a.canvas.height}" overflow="hidden">${s}</svg>`;
 			return {
 				...r,
-				svg: `<g transform="${ne(o)}" data-penrose-scope="${H(t)}">${c}</g>`
+				svg: `<g transform="${ne(o)}" data-penrose-scope="${Ae(t)}">${c}</g>`
 			};
 		},
 		renderSvg(e, t) {
-			return t ? t.error ? { svg: ke(t.x, t.y, `Penrose: ${t.error}`.slice(0, 140)) } : t.pending && !t.svg ? { svg: Ae(t) } : { svg: t.svg ?? "" } : { svg: "" };
+			return t ? t.error ? { svg: Oe(t.x, t.y, `Penrose: ${t.error}`.slice(0, 140)) } : t.pending && !t.svg ? { svg: ke(t) } : { svg: t.svg ?? "" } : { svg: "" };
 		},
 		selection: {
 			priority: 5,
@@ -844,8 +844,8 @@ function Pe() {
 		dependsOnCanonical: [i, r],
 		dependsOnComputed: [p.layout],
 		derive(e, t, n) {
-			if (!V(n, e.scopeId)) return;
-			let r = De(e, e.scopeId, n);
+			if (!H(n, e.scopeId)) return;
+			let r = Ee(e, e.scopeId, n);
 			if (r) return r;
 			let i = x(n, e.scopeId);
 			if (i) return {
@@ -868,7 +868,7 @@ function Pe() {
 			},
 			hitTest(e, t, n, r, a) {
 				let o = t.getCanonical(e, i);
-				return o ? Oe(o, o.scopeId, t, n, r, a) : Infinity;
+				return o ? De(o, o.scopeId, t, n, r, a) : Infinity;
 			},
 			intersectsRect(t, n, r, i, a, o) {
 				let s = e(t, n);
@@ -1770,61 +1770,82 @@ var st = (e) => Math.round(e * 100) / 100, ct = class {
 			y: 0
 		};
 		i.host.screenToWorld(r.clientX, r.clientY, s);
-		let c = {
+		let c = this.canvasOfWorld(t, s), l = {
 			target: {
 				scopeId: e,
 				frame: t,
 				...n
 			},
 			baseline: [...o.varyingValues],
-			startCanvas: this.canvasOfWorld(t, s),
+			startCanvas: c,
 			last: [],
-			ending: !1
+			ending: !1,
+			raw: { ...c },
+			smooth: { ...c },
+			sent: { ...c },
+			releasing: !1,
+			releasedAt: 0,
+			finalizing: !1
 		};
-		this.session = c, this.host.runtime.dragging = !0;
-		let l = (e) => {
-			if (this.session !== c) return;
+		this.session = l, this.host.runtime.dragging = !0;
+		let u = (e) => {
+			if (this.session !== l) return;
 			let n = {
 				x: 0,
 				y: 0
 			};
-			i.host.screenToWorld(e.clientX, e.clientY, n);
-			let r = this.canvasOfWorld(t, n);
-			c.target.kind === "computed" ? c.preview = r : c.last = this.targetsFor(c, r), this.flush(c);
-		}, u = (n) => {
-			if (this.session !== c) return;
-			let r = {
+			i.host.screenToWorld(e.clientX, e.clientY, n), l.raw = this.canvasOfWorld(t, n);
+		}, d = (e) => {
+			if (this.session !== l) return;
+			let n = {
 				x: 0,
 				y: 0
 			};
-			i.host.screenToWorld(n.clientX, n.clientY, r);
-			let o = this.canvasOfWorld(t, r);
-			c.target.kind === "computed" ? c.preview = o : c.last = this.targetsFor(c, o), c.ending = !0, (async () => {
-				c.inflight && await c.inflight;
-				let t = (c.target.kind === "computed" && c.target.computedId ? await this.host.runtime.pointDrag(e, c.target.computedId, c.preview ?? c.startCanvas, 0, 0) : await this.host.runtime.drag(e, c.last, 0, 0)).varyingValues;
-				try {
-					let n = c.target.kind === "computed" ? [] : c.last;
-					t = (await this.host.runtime.polish(e, {
-						budgetMs: 80,
-						pins: n
-					})).varyingValues, c.target.kind === "computed" && c.target.computedId && (t = (await this.host.runtime.pointDrag(e, c.target.computedId, c.preview ?? c.startCanvas, 0, 0)).varyingValues);
-				} catch (e) {
-					console.error("[penrose] post-drag polish failed", e);
+			i.host.screenToWorld(e.clientX, e.clientY, n), l.raw = this.canvasOfWorld(t, n), l.releasing = !0, l.releasedAt = performance.now(), l.ending = !0;
+		}, f = async () => {
+			if (!l.finalizing) {
+				l.finalizing = !0, l.ticker && clearInterval(l.ticker), l.raw && (l.target.kind === "computed" ? l.preview = { ...l.raw } : l.last = this.targetsFor(l, l.raw));
+				{
+					l.inflight && await l.inflight;
+					let t = (l.target.kind === "computed" && l.target.computedId ? await this.host.runtime.pointDrag(e, l.target.computedId, l.preview ?? l.startCanvas, 0, 0) : await this.host.runtime.drag(e, l.last, 0, 0)).varyingValues;
+					try {
+						let n = l.target.kind === "computed" ? [] : l.last;
+						t = (await this.host.runtime.polish(e, {
+							budgetMs: 80,
+							pins: n
+						})).varyingValues, l.target.kind === "computed" && l.target.computedId && (t = (await this.host.runtime.pointDrag(e, l.target.computedId, l.preview ?? l.startCanvas, 0, 0)).varyingValues);
+					} catch (e) {
+						console.error("[penrose] post-drag polish failed", e);
+					}
+					if (this.session !== l) return;
+					Ke(this.host, e, t), this.session = void 0, this.host.runtime.dragging = !1, v(), a.world.invalidateComputed?.(), this.rebuild();
 				}
-				this.session === c && (Ke(this.host, e, t), this.session = void 0, this.host.runtime.dragging = !1, g(), a.world.invalidateComputed?.(), this.rebuild());
-			})();
-		}, d = () => {
-			if (this.session !== c) return;
-			let t = c.baseline;
-			this.session = void 0, this.host.runtime.dragging = !1, g(), this.host.runtime.restore(e, t).then(() => {
+			}
+		}, m = () => {
+			if (this.session !== l) return;
+			let t = l.baseline;
+			this.session = void 0, this.host.runtime.dragging = !1, l.ticker && clearInterval(l.ticker), v(), this.host.runtime.restore(e, t).then(() => {
 				a.world.invalidateComputed?.(), this.rebuild();
 			});
-		}, f = (e) => {
-			e.key === "Escape" && d();
-		}, m = () => d(), h = () => d(), g = () => {
-			window.removeEventListener("pointermove", l), window.removeEventListener("pointerup", u), window.removeEventListener("pointercancel", d), window.removeEventListener("keydown", f), window.removeEventListener("blur", m), window.removeEventListener("compositionstart", h);
+		}, h = (e) => {
+			e.key === "Escape" && m();
+		}, g = () => m(), _ = () => m(), v = () => {
+			window.removeEventListener("pointermove", u), window.removeEventListener("pointerup", d), window.removeEventListener("pointercancel", m), window.removeEventListener("keydown", h), window.removeEventListener("blur", g), window.removeEventListener("compositionstart", _);
 		};
-		window.addEventListener("pointermove", l), window.addEventListener("pointerup", u), window.addEventListener("pointercancel", d), window.addEventListener("keydown", f), window.addEventListener("blur", m), window.addEventListener("compositionstart", h);
+		window.addEventListener("pointermove", u), window.addEventListener("pointerup", d), window.addEventListener("pointercancel", m), window.addEventListener("keydown", h), window.addEventListener("blur", g), window.addEventListener("compositionstart", _);
+		let y = performance.now();
+		l.ticker = setInterval(() => {
+			if (this.session !== l || !l.raw || !l.smooth) return;
+			let e = performance.now(), t = Math.min(32, Math.max(1, e - y));
+			y = e;
+			let n = 1 - Math.exp(-t / 55);
+			l.smooth = {
+				x: l.smooth.x + (l.raw.x - l.smooth.x) * n,
+				y: l.smooth.y + (l.raw.y - l.smooth.y) * n
+			}, (!l.sent || Math.hypot(l.smooth.x - l.sent.x, l.smooth.y - l.sent.y) > .02) && (l.sent = { ...l.smooth }, l.target.kind === "computed" ? l.preview = { ...l.smooth } : l.last = this.targetsFor(l, l.smooth), this.flush(l));
+			let r = Math.hypot(l.raw.x - l.smooth.x, l.raw.y - l.smooth.y);
+			l.releasing && (r < .5 || e - l.releasedAt > 320) && f();
+		}, 16);
 	}
 	targetsFor(e, t) {
 		let { input: n, kind: r } = e.target, { baseline: i, startCanvas: a } = e;
@@ -2413,7 +2434,7 @@ var vt = class {
 		}, o = (t) => {
 			let n = e.world.registerComputed?.(t);
 			n && r.push(n);
-		}, s = Ee(i);
+		}, s = Te(i);
 		o(s.compiled), o(s.layout);
 		for (let t of rt(a)) r.push(e.commands.register(t));
 		let c = new ct(a);

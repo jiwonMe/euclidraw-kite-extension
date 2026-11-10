@@ -140,6 +140,7 @@ suite('selection-scoped gizmos', () => {
     const handle = host.gizmoHandles()[0]!;
     expect(host.press(handle.x, handle.y)).toBe(true);
     host.pointer('pointermove', handle.x + 40, handle.y + 20);
+    await new Promise(resolve => setTimeout(resolve, 250));
     host.paint();
     const circle = host.hud.querySelector('[data-role="penrose-gizmos"] circle')!;
     const x = Number(circle.getAttribute('cx'));
@@ -147,6 +148,7 @@ suite('selection-scoped gizmos', () => {
     expect(Math.abs(x - (handle.x + 40))).toBeLessThan(0.6);
     expect(Math.abs(y - (handle.y + 20))).toBeLessThan(0.6);
     host.pointer('pointerup', handle.x + 40, handle.y + 20);
+    await new Promise(resolve => setTimeout(resolve, 600));
     await settle(host);
   });
 

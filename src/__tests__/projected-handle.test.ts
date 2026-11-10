@@ -39,7 +39,7 @@ suite('projected handles', () => {
     const jsonlBefore = host.jsonl(), commitsBefore = host.commits();
     expect(host.press(handles[0]!.x, handles[0]!.y)).toBe(true);
     host.pointer('pointermove', handles[0]!.x + 30, handles[0]!.y - 20);
-    await wait(host, 40);
+    await wait(host, 250);
     expect(host.commits()).toBe(commitsBefore);
     expect(host.jsonl()).toBe(jsonlBefore);
     // The handle's world position follows the pointer (screen == world here).
@@ -48,7 +48,7 @@ suite('projected handles', () => {
     expect(Math.abs(during.y - (handles[0]!.y - 20))).toBeLessThan(1.5);
 
     host.pointer('pointerup', handles[0]!.x + 30, handles[0]!.y - 20);
-    await wait(host, 120);
+    await wait(host, 500);
     expect(host.commits()).toBe(commitsBefore + 1);
     const moved = host.gizmoHandles()[0]!;
     expect(Math.hypot(moved.x - handles[0]!.x, moved.y - handles[0]!.y)).toBeGreaterThan(20);
@@ -80,13 +80,13 @@ suite('projected handles', () => {
     const commits = host.commits();
     expect(host.press(before.x, before.y)).toBe(true);
     host.pointer('pointermove', before.x + 20, before.y + 10);
-    await wait(host, 120);
+    await wait(host, 500);
     expect(host.commits()).toBe(commits);
     const during = host.gizmoHandles().find(handle => handle.id === vertex!.id)!;
     expect(Math.abs(during.x - (before.x + 20))).toBeLessThan(1.5);
     expect(Math.abs(during.y - (before.y + 10))).toBeLessThan(1.5);
     host.pointer('pointerup', before.x + 20, before.y + 10);
-    await wait(host, 200);
+    await wait(host, 500);
     expect(host.commits()).toBe(commits + 1);
     expect(host.undo()).toBe(true);
     await wait(host, 80);
