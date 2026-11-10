@@ -48,7 +48,7 @@ pnpm dev         # http://127.0.0.1:5174
 | `src/penrose/aspects.ts` | 어스펙트 정의, 스코프 렌더, 선택 기여. |
 | `src/penrose/documents.ts` | 삽입·DSL 적용·멤버 동기화·드래그 커밋·핀. **모든 정본 쓰기.** |
 | `src/penrose/manipulate.ts` | 기즈모, 포인터 드래그, 취소. 핸들은 최적화 입력에만. |
-| `src/penrose/panels.ts` | Tri-DSL·진단 패널. 로컬 UI 상태만. |
+| `src/penrose/panels.ts` | Tri-DSL·진단 패널. 로컬 UI 상태만. 패널은 활동 레일에서 열립니다(`ui.shell`은 확장에 비공개). |
 | `src/penrose/bake.ts` | `vector.path` 베이킹. 지원하지 않는 도형은 건너뜁니다. |
 | `src/__tests__/` | 실제 커널 하네스. `src/penrose/__tests__/` | alid 없이 도는 순수 테스트. |
 

@@ -79,7 +79,12 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 놓을 때 0스텝 재핀 → `varyingValues` 한 트랜잭션 커밋 → Undo 1회로 원복.
 - 취소(Esc·blur·pointercancel)는 저장된 입력으로 레이아웃만 되돌립니다.
 
-## 7. 호스트 변경 없음
+## 7. 패널
+
+- `penrose.panel.tri-editor`와 `penrose.panel.diagnostics`는 `navigation.group = document`로 활동 레일에 노출됩니다.
+- 호스트는 패널 열기를 `ui.shell`로 자기 UI에만 제공하고, 이 서비스는 확장 컨텍스트에서 `PhantomDependency`로 막힙니다. 따라서 확장 명령은 열기를 시도한 뒤 실패하면 레일 위치를 안내합니다.
+
+## 8. 호스트 변경 없음
 
 - 설치 API 2의 공개 계약만 씁니다.
 - TeX는 호스트에 노출되지 않으므로 MathJax를 번들에 포함합니다(워커 크기 2.88 MiB).

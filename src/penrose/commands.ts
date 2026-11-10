@@ -27,12 +27,27 @@ interface ApplyArgs {
   styleDsl?: string;
 }
 
-function openPanel(host: PenroseHost, panelId: string): void {
+const PANEL_TITLES: Record<string, string> = {
+  'penrose.panel.tri-editor': 'Penrose Tri-DSL',
+  'penrose.panel.diagnostics': 'Penrose 진단',
+};
+
+/**
+ * The host exposes panel opening to its own UI (`ui.shell`), not to extensions:
+ * extension panels are opened from the workbench activity rail. Try every
+ * documented door first, then tell the user where the panel actually lives.
+ */
+function openPanel(host: PenroseHost, panelId: string): boolean {
   const { context } = host;
-  const workbench = optionalService<{ openPanel?(id: string): void }>(context, 'workspace.layout')
-    ?? optionalService<{ openPanel?(id: string): void }>(context, 'ui.workbench');
-  if (workbench?.openPanel) { workbench.openPanel(panelId); return; }
-  console.info(`[penrose] 패널을 열 수 없습니다: ${panelId}`);
+  for (const id of ['ui.shell', 'workspace.layout', 'ui.workbench']) {
+    const service = optionalService<{ openPanel?(id: string): void }>(context, id);
+    if (service?.openPanel) {
+      try { service.openPanel(panelId); return true; } catch { /* fall through */ }
+    }
+  }
+  const title = PANEL_TITLES[panelId] ?? panelId;
+  console.info(`[penrose] '${title}' 패널은 작업 영역 왼쪽 활동 레일에서 열 수 있습니다.`);
+  return false;
 }
 
 function requireScope(host: PenroseHost, explicit?: string): EntityId {

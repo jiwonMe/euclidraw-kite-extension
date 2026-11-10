@@ -34,7 +34,7 @@ export async function load() {
 }
 
 export interface Host {
-  kernel: Any; world: Any; wasm: Any; compiler: Any; commands: Any; services: Any; registry: Any; plugin: Any; manifest: Any;
+  kernel: Any; world: Any; wasm: Any; compiler: Any; commands: Any; services: Any; registry: Any; plugin: Any; manifest: Any; workbench: Any;
   history: { begin(): void; commit(): void; abort(): void };
   undo(): boolean; redo(): boolean;
   commits: () => number;
@@ -73,6 +73,8 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
   };
   const sync = (done: boolean) => { world.replaceCanonicalSnapshot(wasm.get_canonical_json()); return done; };
   const services = new kernel.ServiceRegistry(), commands = new kernel.CommandRegistry(world), compiler = new kernel.SceneVectorCompiler();
+  const workbench = new kernel.WorkbenchRegistry();
+  services.provide('ui.workbench', workbench);
   const stateMachine = new kernel.ToolStateMachine({});
   stateMachine.mountChildState('root', { id: 'select' });
   stateMachine.mountChildState('root.select', { id: 'core.select-suite:idle' });
@@ -122,7 +124,7 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
   const registry = new kernel.ExtensionRuntimeRegistry({ world, services, commands, compiler }, { onError: (error: unknown) => errors.push(error), history });
   registry.registerPackages(packages);
   const h: Host = {
-    kernel, world, wasm, compiler, commands, services, registry, plugin, manifest, history,
+    kernel, world, wasm, compiler, commands, services, registry, plugin, manifest, workbench, history,
     undo: () => sync(wasm.undo()), redo: () => sync(wasm.redo()),
     commits: () => commits, groups: () => groups,
     paint: () => { world.flushComputedFrontier(); for (const paint of painters) paint(); world.flushComputedFrontier(); },

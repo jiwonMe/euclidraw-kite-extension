@@ -65,6 +65,21 @@ suite('clipboard', () => {
   });
 });
 
+suite('workbench panels', () => {
+  it('registers both panels in the document navigation group', async () => {
+    host = await startHost();
+    const panels = host.workbench.getSnapshot().panels.filter((panel: { ownerId: string }) => panel.ownerId === 'penrose.studio');
+    expect(panels.map((panel: { panelId: string }) => panel.panelId).sort()).toEqual([
+      'penrose.panel.diagnostics',
+      'penrose.panel.tri-editor',
+    ]);
+    for (const panel of panels) {
+      expect(panel.navigation?.group).toBe('document');
+      expect(panel.mount).toBeTypeOf('function');
+    }
+  });
+});
+
 suite('bake-to-vector', () => {
   it('bakes geometry into vector.path and removes the scope', async () => {
     host = await startHost({ vectorPath: true });

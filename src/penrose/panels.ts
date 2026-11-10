@@ -33,11 +33,15 @@ function readScope(context: WorkbenchPanelContext, id: EntityId): PenroseScopeAs
   };
 }
 
+const PANEL_ICON = { paths: ['M3 4h14v12H3z', 'M6 8h8', 'M6 11h5'] } as const;
+
 export function createTriEditorPanel(): WorkbenchPanelSpec {
   return {
     panelId: PANELS.triEditor,
     title: 'Penrose Tri-DSL',
+    icon: PANEL_ICON,
     defaultZone: 'right',
+    navigation: { group: 'document', order: 60 },
     mount(host, context) {
       host.setAttribute('style', `display:flex;flex-direction:column;gap:6px;padding:8px;font:${FONT};min-width:320px;height:100%;box-sizing:border-box`);
       const header = el('div', 'display:flex;align-items:center;gap:6px');
@@ -123,7 +127,9 @@ export function createDiagnosticsPanel(): WorkbenchPanelSpec {
   return {
     panelId: PANELS.diagnostics,
     title: 'Penrose 진단',
+    icon: PANEL_ICON,
     defaultZone: 'right',
+    navigation: { group: 'document', order: 61 },
     mount(host, context) {
       host.setAttribute('style', `padding:8px;font:${FONT};min-width:280px;height:100%;box-sizing:border-box;overflow:auto`);
       const actions = el('div', 'display:flex;gap:6px;margin-bottom:8px');
