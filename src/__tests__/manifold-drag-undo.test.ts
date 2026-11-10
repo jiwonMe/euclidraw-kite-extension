@@ -42,7 +42,7 @@ suite('gizmo drag + single undo (real kernel + Loro core)', () => {
       expect(host.jsonl()).toBe(jsonlBefore);
     }
     host.pointer('pointerup', x + 60, y + 36);
-    await wait(host, 500);
+    await wait(host, 800);
     expect(host.commits()).toBe(commitsBefore + 1);
     expect(host.groups()).toBe(groupsBefore + 1);
 
@@ -67,7 +67,7 @@ suite('gizmo drag + single undo (real kernel + Loro core)', () => {
     await wait(host, 8);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     host.pointer('pointerup', x + 50, y + 50);
-    await wait(host, 500);
+    await wait(host, 800);
     expect(host.commits()).toBe(commits);
     expect(host.jsonl()).toBe(before);
     const now = memberBox(host, memberId);

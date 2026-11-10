@@ -226,6 +226,28 @@ export class PenroseRuntime {
   }
 
   /** End-of-drag full convergence from the current warm start. */
+  /** Animate between two input vectors by re-deriving shapes each frame. */
+  async animate(scopeId: EntityId, from: readonly number[], to: readonly number[], durationMs = 260): Promise<void> {
+    const entry = this.entries.get(scopeId);
+    if (!entry) return;
+    this.dragging = true;
+    const started = performance.now();
+    try {
+      for (;;) {
+        const t = Math.min(1, (performance.now() - started) / durationMs);
+        const eased = 1 - (1 - t) ** 3;
+        const values = from.map((value, index) => value + ((to[index] ?? value) - value) * eased);
+        const layout = await this.engine.layout(scopeId, values);
+        entry.layout = layout;
+        this.notify();
+        if (t >= 1) break;
+        await new Promise(resolve => setTimeout(resolve, 16));
+      }
+    } finally {
+      this.dragging = false;
+    }
+  }
+
   async polish(scopeId: EntityId, options?: { maxSteps?: number; budgetMs?: number; pins?: readonly { index: number; value: number }[] }): Promise<WireLayout> {
     const layout = await this.engine.polish(scopeId, options);
     const entry = this.entries.get(scopeId);

@@ -440,11 +440,20 @@ export class PenroseManipulator {
         let values = result.varyingValues;
         try {
           const pins = session.target.kind === 'computed' ? [] : session.last;
-          const polished = await this.host.runtime.polish(scopeId, { budgetMs: 80, pins });
+          // The drag stage already unions the geometry and arrow stages, so a
+          // short pass on the same stage hardens `disjoint` without re-running
+          // constraints the staged solve abandoned (which made the layout jump).
+          const polished = await this.host.runtime.polish(scopeId, { budgetMs: 120, pins });
           values = polished.varyingValues;
           if (session.target.kind === 'computed' && session.target.computedId) {
             const snapped = await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0, 0);
             values = snapped.varyingValues;
+          }
+          // Ease the release re-layout instead of snapping to the new solution.
+          if (values !== result.varyingValues) {
+            session.last = [];
+            session.preview = undefined;
+            await this.host.runtime.animate(scopeId, result.varyingValues, values, 200);
           }
         } catch (error) {
           console.error('[penrose] post-drag polish failed', error);

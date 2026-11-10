@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 /**
- * A large staged diagram (computer architecture) must keep its layout while a
- * single component is dragged: only the dragged owner may move, arrow geometry
- * must stay on canvas, and the frame must not explode the energy.
+ * A large staged diagram (computer architecture) must keep a valid layout while
+ * a single component is dragged. Penrose only optimizes the *current* stage, so
+ * dragging from the final (arrow) stage used to skip the `disjoint` constraints
+ * in the geometry stage and the dragged shape ploughed through its neighbours.
+ * The drag stage unions both stages: neighbours move aside instead of
+ * overlapping, arrows stay on canvas, and the frame must not explode the energy.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -25,9 +28,27 @@ function componentCentres(h: Host, scopeId: string) {
   }
   return out;
 }
+/** Overlapping component boxes (gap < 0), as owner pairs. */
+function overlaps(h: Host, scopeId: string) {
+  const rects = layout(h, scopeId).shapes.filter(
+    (shape: { owner?: string; shapeType: string }) => shape.owner && shape.shapeType === 'Rectangle',
+  );
+  const pairs: string[] = [];
+  for (let i = 0; i < rects.length; i++) {
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i]!, b = rects[j]!;
+      const ax = (a.props.center as number[])[0]!, ay = (a.props.center as number[])[1]!;
+      const bx = (b.props.center as number[])[0]!, by = (b.props.center as number[])[1]!;
+      const gapX = Math.max(0, Math.abs(ax - bx) - ((a.props.width as number) + (b.props.width as number)) / 2);
+      const gapY = Math.max(0, Math.abs(ay - by) - ((a.props.height as number) + (b.props.height as number)) / 2);
+      if (Math.hypot(gapX, gapY) < 0.5) pairs.push(`${a.owner}/${b.owner}`);
+    }
+  }
+  return pairs;
+}
 
 suite('large diagram drag stability', () => {
-  it('moves only the dragged component and keeps arrows on canvas', async () => {
+  it('reflows neighbours instead of overlapping them', async () => {
     host = await startHost();
     const scopeId = await host.run<string>('penrose.studio:insert-scope');
     await settle(host);
@@ -45,7 +66,6 @@ suite('large diagram drag stability', () => {
     host.select([scopeId]);
     host.paint();
     const before = componentCentres(host, scopeId);
-    const energyBefore = layout(host, scopeId).energy;
     const commits = host.commits();
     const handle = host.gizmoHandles().find(entry => entry.id.includes('`MAR`.icon'))!;
     expect(handle).toBeTruthy();
@@ -61,8 +81,11 @@ suite('large diagram drag stability', () => {
       distance: Math.hypot(after[owner]!.x - start.x, after[owner]!.y - start.y),
     }));
     const others = moved.filter(entry => entry.owner !== 'MAR');
-    expect(Math.max(...others.map(entry => entry.distance))).toBeLessThan(5);
     expect(moved.find(entry => entry.owner === 'MAR')!.distance).toBeGreaterThan(80);
+    // Neighbours make room for the dragged box, but must not be flung across
+    // the canvas.
+    expect(Math.max(...others.map(entry => entry.distance))).toBeLessThan(300);
+    expect(overlaps(host, scopeId)).toEqual([]);
     for (const shape of layout(host, scopeId).shapes) {
       const points = shape.props.start ? [shape.props.start, shape.props.end] : (shape.props.points ?? []);
       for (const point of points as number[][]) {
@@ -70,10 +93,43 @@ suite('large diagram drag stability', () => {
         expect(Math.abs(point[1]!)).toBeLessThan(2000);
       }
     }
-    expect(layout(host, scopeId).energy).toBeLessThan(energyBefore * 8 + 1e6);
+    // The drag stage carries the geometry penalties, so energy is not comparable
+    // across stages; keep the diagram inside its canvas instead.
+    for (const centre of Object.values(after)) {
+      expect(Math.abs(centre.x)).toBeLessThan(700);
+      expect(Math.abs(centre.y)).toBeLessThan(700);
+    }
     expect(host.commits()).toBe(commits);
     host.pointer('pointerup', handle.x + 100, handle.y);
     await new Promise(resolve => setTimeout(resolve, 500));
     expect(host.commits()).toBe(commits + 1);
+    expect(overlaps(host, scopeId)).toEqual([]);
   }, 120_000);
+
+  it('drag a tall bus without crushing the layout', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    await host.run('penrose.studio:apply-dsl', {
+      scopeId,
+      domainDsl: fixture('sys.domain'),
+      substanceDsl: fixture('sys.substance'),
+      styleDsl: fixture('sys.style'),
+    });
+    await settle(host);
+    host.select([scopeId]);
+    host.paint();
+    const handle = host.gizmoHandles().find(entry => entry.id.includes('`BUS`.icon'))!;
+    expect(handle).toBeTruthy();
+    expect(host.press(handle.x, handle.y)).toBe(true);
+    for (let step = 1; step <= 4; step++) {
+      host.pointer('pointermove', handle.x + step * 30, handle.y - step * 15);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      host.paint();
+      expect(overlaps(host, scopeId)).toEqual([]);
+    }
+    host.pointer('pointerup', handle.x + 120, handle.y - 60);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(overlaps(host, scopeId)).toEqual([]);
+  }, 180_000);
 });

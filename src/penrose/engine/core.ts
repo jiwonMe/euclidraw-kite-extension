@@ -656,7 +656,7 @@ export function layoutOf(session: CoreSession, varyingValues?: readonly number[]
     computed,
     labels: session.labels,
     energy: evalEnergy({ ...state, varyingValues: values }),
-    stages: state.currentStageIndex,
+    stages: realStageIndex(state),
   };
 }
 
@@ -807,36 +807,88 @@ function followLabels(state: PenroseState, before: LabelSnapshot, afterState: Pe
   state.varyingValues = values;
 }
 
+interface StageMasks {
+  readonly inputMask: boolean[];
+  readonly constrMask: boolean[];
+  readonly objMask: boolean[];
+}
+
+const DRAG_STAGE = '__drag__';
+
+/**
+ * Penrose stages are cumulative in *intent* but not in their masks: a stage
+ * only optimizes the constraints assigned to it. After a compile the optimizer
+ * sits on the last (usually arrow) stage, so dragging with only that stage
+ * leaves `disjoint` in the geometry stage unenforced and the dragged shape
+ * ploughs through its neighbours (this is what wrecked the architecture
+ * example).
+ *
+ * Build one synthetic stage that unions the current stage with the immediately
+ * preceding one: that is the geometry stage (rects: `disjoint`, shapeDistance)
+ * plus the current stage (arrow attachment). Unioning *every* stage is wrong:
+ * earlier stages may hold constraints the staged solve has already abandoned
+ * (e.g. dots that pull connected parts together), so re-enabling them makes the
+ * diagram collapse.
+ */
+function dragStageOf(state: PenroseState): PenroseState {
+  const stages = state.optStages as readonly string[];
+  if (stages.includes(DRAG_STAGE)) {
+    const index = stages.indexOf(DRAG_STAGE);
+    return state.currentStageIndex === index ? state : { ...state, currentStageIndex: index };
+  }
+  const sets = state.constraintSets as Map<string, StageMasks>;
+  const current = state.currentStageIndex;
+  const group = [stages[Math.max(0, current - 1)], stages[current]]
+    .filter((name): name is string => name !== undefined);
+  const masks = group.map(name => sets.get(name)).filter((mask): mask is StageMasks => mask !== undefined);
+  if (!masks.length) return state;
+  const combine = (key: keyof StageMasks) => {
+    const size = masks[0]![key].length;
+    const out = new Array<boolean>(size).fill(false);
+    for (const mask of masks) for (let i = 0; i < size; i++) if (mask[key][i]) out[i] = true;
+    return out;
+  };
+  sets.set(DRAG_STAGE, { inputMask: combine('inputMask'), constrMask: combine('constrMask'), objMask: combine('objMask') });
+  return { ...state, optStages: [...stages, DRAG_STAGE], currentStageIndex: stages.length };
+}
+
+/** The real (non-synthetic) stage index, for display and release logic. */
+function realStageIndex(state: PenroseState): number {
+  const stages = state.optStages as readonly string[];
+  const drag = stages.indexOf(DRAG_STAGE);
+  if (drag === -1 || state.currentStageIndex !== drag) return state.currentStageIndex;
+  return Math.max(0, drag - 1);
+}
+
 /**
  * One drag frame. The previous optimizer state ends at `EPConverged`, where
  * `step` is a no-op; because a drag changes `varyingValues` directly, we must
  * restart the optimizer (keeping the warm-start values and penalty weight) or
  * every frame after the first would skip convergence.
  */
-function settleForDrag(state: PenroseState, steps: number, budgetMs = 0): PenroseState {
-  // 1e8 is the highest weight where L-BFGS still takes steps for label
-  // objectives; at the final EP weight (1e9) the preconditioned convergence
-  // check stops immediately and AutoLabel freezes during the drag.
-  // Large diagrams need a softer weight: very stiff objectives plus a
-  // time-budgeted step can blow up the arrow stage.
+function settleForDrag(input: PenroseState, steps: number, budgetMs = 0): PenroseState {
+  const state = dragStageOf(input);
+  // The drag stage now carries the hard geometry constraints, so it needs a
+  // weight stiff enough to keep `disjoint` satisfied while the pointer moves.
+  // Very large diagrams use a slightly softer weight so a time-budgeted step
+  // stays stable; smaller ones keep the label-friendly 1e8.
   const count = state.varyingValues.length;
-  const DRAG_WEIGHT = count > 250 ? 1e5 : count > 120 ? 1e7 : 1e8;
+  const DRAG_WEIGHT = count > 250 ? 1e7 : 1e8;
   const params = {
     ...start(count),
     weight: Math.min(state.params.weight, DRAG_WEIGHT),
   } as PenroseState['params'];
-  const restarted: PenroseState = { ...state, params };
   if (budgetMs > 0) {
     const started = performance.now();
     try {
-      const stepped = step(restarted, { until: () => performance.now() - started >= budgetMs });
-      return stepped.isOk() ? stepped.value : restarted;
+      const stepped = step({ ...state, params }, { until: () => performance.now() - started >= budgetMs });
+      return stepped.isOk() ? stepped.value : { ...state, params };
     } catch {
-      return restarted;
+      return { ...state, params };
     }
   }
-  const stepped = stepTimes(restarted, steps);
-  return stepped.isOk() ? stepped.value : restarted;
+  const stepped = stepTimes({ ...state, params }, steps);
+  return stepped.isOk() ? stepped.value : { ...state, params };
 }
 
 /** Drag: move the given input indexes to absolute targets, converge, then re-pin. */
@@ -901,9 +953,14 @@ export function polishSession(session: CoreSession, options: PolishOptions = {})
   const beforeLabels = labelSnapshot(session.state);
   const state = session.state;
   const beforeEnergy = evalEnergy(state);
+  // Stay on the drag stage: it is the union of the geometry and arrow stages,
+  // so the release pass hardens `disjoint` without re-running abandoned stages.
   const restarted: PenroseState = {
     ...state,
-    params: { ...start(state.varyingValues.length), weight: Math.min(state.params.weight, 1e8) } as PenroseState['params'],
+    params: {
+      ...start(state.varyingValues.length),
+      weight: Math.min(state.params.weight, 1e8),
+    } as PenroseState['params'],
   };
   let polished = restarted;
   if (budgetMs > 0) {
