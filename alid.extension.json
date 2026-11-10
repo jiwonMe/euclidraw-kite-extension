@@ -1,12 +1,15 @@
 {
   "apiVersion": 2,
   "id": "kite.studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "engine": "^0.1.0",
   "dependencies": {},
   "optionalDependencies": {
+    "core.select-suite": "^0.1.0",
+    "core.clipboard": "^0.1.0",
     "sys.minibuffer": "^0.1.0",
-    "core.select-suite": "^0.1.0"
+    "doc.markdown-math": "^0.1.0",
+    "vector.pen-suite": "^0.1.0"
   },
   "conflicts": [],
   "provides": {
@@ -17,12 +20,15 @@
       "kite.scope",
       "kite.member"
     ],
-    "hsmSlots": []
+    "hsmSlots": [
+      "root.select.kite.studio:manipulate",
+      "root.select.kite.studio:create"
+    ]
   },
   "title": "Kite Studio",
-  "summary": "Domain · Substance · Style 3분할 DSL과 다양체 정사영 솔버로, 구속 조건이 살아있는 기하 도해를 캔버스에 만듭니다.",
+  "summary": "Domain · Substance · Style 3분할 DSL과 Wasm SIMD 다양체 정사영 솔버로, 개별 점·선·원·라벨이 일급 캔버스 엔티티인 구속 기하 도해를 만듭니다.",
   "entry": "dist/plugin.js",
-  "sha256": "5a8c37d34fe7a50fb0628290a37fec9c7b86ed204d3d5b825da4c7df2d3e87f6",
+  "sha256": "df5c25d70ed9a4ccf8079d93808ec023494757c9ca97b80bc3615bcaf21d0712",
   "aspectIds": [
     "kite.scope",
     "kite.member"
@@ -33,39 +39,54 @@
       "kite.member",
       "core.transform",
       "core.bounds",
-      "core.stacking"
+      "core.stacking",
+      "markdown.card",
+      "vector.path"
     ],
     "writeAspects": [
       "kite.scope",
       "kite.member",
       "core.transform",
       "core.bounds",
-      "core.stacking"
+      "core.stacking",
+      "markdown.card",
+      "vector.path"
     ],
     "services": [
       "canvas.active-tool-surface",
+      "canvas.frames",
+      "canvas.tool-input",
       "canvas.surface",
       "canvas.interaction",
       "canvas.selection",
-      "canvas.frames"
+      "ui.completingRead",
+      "ui.workbench"
     ],
     "commands": [
-      "kite.studio:insert-diagram",
+      "kite.studio:insert-scope",
+      "kite.studio:add-point",
+      "kite.studio:add-segment",
+      "kite.studio:add-circle",
+      "kite.studio:add-label",
       "kite.studio:apply-dsl",
       "kite.studio:reset-example",
-      "kite.studio:add-point",
-      "kite.studio:add-constraint",
+      "kite.studio:constrain",
+      "kite.studio:constrain-tangent",
+      "kite.studio:constrain-perpendicular",
+      "kite.studio:constrain-parallel",
       "kite.studio:constrain-on-circle",
       "kite.studio:constrain-midpoint",
-      "kite.studio:constrain-perpendicular",
       "kite.studio:constrain-equal-length",
-      "kite.studio:constrain-horizontal",
-      "kite.studio:constrain-vertical",
-      "kite.studio:constrain-tangent",
-      "kite.studio:set-distance",
-      "kite.studio:freeze-geometry",
-      "kite.studio:repair-bindings",
-      "kite.studio:reproject"
+      "kite.studio:constrain-distance",
+      "kite.studio:relax-constraint",
+      "kite.studio:remove-constraint",
+      "kite.studio:toggle-pin",
+      "kite.studio:reproject",
+      "kite.studio:bake-to-vector",
+      "kite.studio:extract-subgraph",
+      "kite.studio:set-param",
+      "kite.studio:open-tri-editor",
+      "kite.studio:open-diagnostics"
     ]
   }
 }

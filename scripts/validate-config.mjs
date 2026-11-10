@@ -54,5 +54,6 @@ export function validateConfig(metadata) {
   if (!record(metadata.provides) || Object.keys(metadata.provides).some(key => !['services', 'hsmSlots'].includes(key))) throw new Error('extension.json provides must declare services and hsmSlots; aspect IDs are generated in src/manifest.ts.');
   list(metadata.provides.services, 'provides.services');
   list(metadata.provides.hsmSlots, 'provides.hsmSlots');
+  for (const slot of metadata.provides.hsmSlots) if (!slot.startsWith(`root.select.${metadata.id}:`)) throw new Error(`hsmSlots must live under root.select.${metadata.id}: (${slot}).`);
   return metadata;
 }

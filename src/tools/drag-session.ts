@@ -1,185 +1,163 @@
-import type {
-  CompiledScope, Constraint, EntityId, MemberPins, ScopeProps, SolvedState,
-} from '../types.ts';
-import { solveForInteraction } from '../solver/runtime.ts';
-import { pointOf, radiusOf, seedsFromValues, solveState } from '../solver/solve.ts';
-import { layoutFor } from '../solver/solve.ts';
-
-export interface Promotion {
-  kind: 'midpoint' | 'perpendicular' | 'onCircle';
-  text: string;
-  line: string;
-  constraint: Constraint;
-}
-
-export interface DragFrame {
-  seeds: Record<EntityId, number[]>;
-  state: SolvedState;
-  promotion: Promotion | null;
-}
+import type { CompiledScope } from '../dsl/compile.ts';
+import type { EntityId } from '../host.ts';
+import { encodeSeeds, toLocal } from '../geometry.ts';
+import { SolverInstance, type Frame } from '../solver-runtime.ts';
+import { detectSnap, type SnapCandidate } from './snap.ts';
 
 /**
- * One deterministic drag. The caller owns the ScratchOverlay; this class only
- * computes warm-started XPBD projections and a final canonical patch.
+ * One pointer drag (PRD §5.1). Owns a private solver slot warm-started from
+ * the committed state, so canonical topology and the shared pool are never
+ * mutated mid-gesture.
+ *
+ *  - pointerdown: soft pins (slack constraints) at each grabbed DOF
+ *  - frame:       ≤ maxSubstepsPerFrame XPBD + manifold-projection substeps
+ *  - Shift:       snap detection; a temporary constraint previews the snap
+ *  - pointerup:   pins removed, 20-iteration polish, seeds returned once
  */
-export class KiteDragSession {
-  private seeds: Record<EntityId, number[]>;
-  private state: SolvedState;
-  private promotion: Promotion | null = null;
+export interface DragTarget {
+  readonly substanceId: string;
+  readonly kind: 'point' | 'scalar';
+  /** Pointer → handle offset at press, scope-local, so the handle does not jump. */
+  readonly grab: { x: number; y: number };
+  readonly slackWeight: number;
+}
+
+export interface DragFrameResult {
+  readonly dofs: Float64Array;
+  readonly seeds: Record<EntityId, number[]>;
+  readonly residual: number;
+  readonly snap: SnapCandidate | undefined;
+  readonly elapsedMs: number;
+}
+
+// α̃ = α/Δt² ≈ 0.014 at slackWeight 1: the cursor leads, the hard manifold still wins each sweep.
+const BASE_COMPLIANCE = 1e-6;
+const POLISH_ITERATIONS = 20;
+/** Upper bound on hard re-projection sweeps per frame (stops early at 1e-6 local units). */
+const MANIFOLD_SWEEPS = 400;
+const FRAME_BUDGET_MS = 4;
+
+export class DragSession {
+  private solver: SolverInstance;
+  private snapSolver?: SolverInstance;
+  private snapKey = '';
+  private snap?: SnapCandidate;
+  private pointer: { x: number; y: number };
+  private shift = false;
+  private disposed = false;
+  readonly startDofs: readonly number[];
 
   constructor(
-    private readonly scope: ScopeProps,
     readonly compiled: CompiledScope,
-    private readonly pins: MemberPins,
-    readonly substanceId: string,
-    readonly kind: 'point' | 'radius',
+    private readonly frame: Frame,
+    initial: readonly number[],
+    private readonly memberPins: readonly number[],
+    readonly targets: readonly DragTarget[],
+    private readonly substeps: number,
+    private readonly damping: number,
+    pointerWorld: { x: number; y: number },
   ) {
-    const initial = solveState(compiled, {
-      seeds: scope.convergedSeeds,
-      memberPins: pins,
-      config: scope.solverConfig,
-      iterations: 0,
-    });
-    this.state = initial;
-    this.seeds = seedsFromValues(compiled, initial.values);
+    this.startDofs = [...initial];
+    this.pointer = toLocal(frame, pointerWorld.x, pointerWorld.y);
+    this.solver = this.instance(compiled);
   }
 
-  currentState(): SolvedState { return this.state; }
-  currentSeeds(): Record<EntityId, number[]> { return this.seeds; }
-  currentPromotion(): Promotion | null { return this.promotion; }
-
-  moveTo(localX: number, localY: number, shift: boolean, snapDistance: number): DragFrame {
-    const iterations = Math.max(1, Math.min(24, this.scope.solverConfig.maxSubstepsPerFrame));
-    const pinTarget = this.kind === 'point'
-      ? { substanceId: this.substanceId, kind: 'point' as const, value: 0, x: localX, y: localY, strength: 0.38 }
-      : { substanceId: this.substanceId, kind: 'radius' as const, value: radiusFrom(this.compiled, this.state, this.substanceId, localX, localY), strength: 0.4 };
-    const first = solveForInteraction(this.scope, this.compiled, this.pins, this.seeds, iterations, pinTarget);
-    this.promotion = shift ? detectPromotion(this.scope, this.compiled, this.pins, this.substanceId, this.kind, localX, localY, snapDistance, first) : null;
-    this.state = this.promotion
-      ? solveForInteraction(this.scope, this.compiled, this.pins, seedsFromValues(this.compiled, first.values, this.seeds), iterations, pinTarget, [this.promotion.constraint])
-      : first;
-    this.seeds = seedsFromValues(this.compiled, this.state.values, this.seeds);
-    return { seeds: this.seeds, state: this.state, promotion: this.promotion };
+  private instance(compiled: CompiledScope): SolverInstance {
+    const solver = new SolverInstance(compiled);
+    solver.setFrame(this.frame);
+    solver.setDamping(this.damping);
+    solver.setMemberPins(this.memberPins);
+    solver.writeDofs(this.solver ? this.solver.dofs : this.startDofs);
+    solver.clearPins();
+    for (const target of this.targets) {
+      const slot = compiled.dofs.find(entry => entry.substanceId === target.substanceId && entry.kind === target.kind);
+      if (!slot) continue;
+      solver.addPin(target.substanceId, slot.off, target.kind === 'scalar', BASE_COMPLIANCE * Math.max(0.05, target.slackWeight));
+    }
+    return solver;
   }
 
-  /** Remove the pointer spring and polish the manifold before the single commit. */
-  finish(): { seeds: Record<EntityId, number[]>; state: SolvedState; promotion: Promotion | null; substanceDsl: string } {
-    const temporary = this.promotion ? [this.promotion.constraint] : [];
-    this.state = solveForInteraction(this.scope, this.compiled, this.pins, this.seeds, 90, undefined, temporary);
-    this.seeds = seedsFromValues(this.compiled, this.state.values);
-    const substanceDsl = this.promotion && !constraintExists(this.compiled, this.promotion.constraint)
-      ? `${this.scope.substanceDsl.replace(/\s*$/, '')}\n${this.promotion.line}\n`
-      : this.scope.substanceDsl;
-    return { seeds: this.seeds, state: this.state, promotion: this.promotion, substanceDsl };
+  update(pointerWorld: { x: number; y: number }, shift: boolean): void {
+    this.pointer = toLocal(this.frame, pointerWorld.x, pointerWorld.y);
+    this.shift = shift;
   }
-}
 
-function radiusFrom(compiled: CompiledScope, state: SolvedState, circleId: string, x: number, y: number): number {
-  const layout = layoutFor(compiled);
-  layout.values.set(state.values);
-  const center = pointOf(layout, compiled.instances.get(circleId)?.center ?? '');
-  return Math.max(1, Math.hypot(x - center.x, y - center.y));
-}
+  private active(): SolverInstance { return this.snapSolver ?? this.solver; }
 
-function detectPromotion(
-  scope: ScopeProps,
-  compiled: CompiledScope,
-  pins: MemberPins,
-  substanceId: string,
-  kind: 'point' | 'radius',
-  _localX: number,
-  _localY: number,
-  snapDistance: number,
-  state: SolvedState,
-): Promotion | null {
-  if (kind !== 'point' || !scope.solverConfig.autoPromoteSnap) return null;
-  const layout = layoutFor(compiled, pins);
-  layout.values.set(state.values);
-  const point = pointOf(layout, substanceId);
-  const candidates: { score: number; promotion: Promotion }[] = [];
-
-  // Perpendicular: the dragged point is a shared endpoint of two segments.
-  for (const instance of compiled.instances.values()) {
-    if (!['segment', 'line', 'ray'].includes(instance.kind) || (instance.a !== substanceId && instance.b !== substanceId)) continue;
-    const pivot = instance.a === substanceId ? instance.b! : instance.a!;
-    const p = pointOf(layout, pivot);
-    const d1 = { x: point.x - p.x, y: point.y - p.y };
-    for (const other of compiled.instances.values()) {
-      if (other.id === instance.id || !['segment', 'line', 'ray'].includes(other.kind)) continue;
-      if (other.a !== substanceId && other.b !== substanceId) continue;
-      const otherPivot = other.a === substanceId ? other.b! : other.a!;
-      if (otherPivot !== pivot) continue;
-      const q = pointOf(layout, otherPivot);
-      const d2 = { x: q.x - p.x, y: q.y - p.y };
-      const l1 = Math.hypot(d1.x, d1.y), l2 = Math.hypot(d2.x, d2.y);
-      if (l1 < 1e-6 || l2 < 1e-6) continue;
-      const angle = Math.abs(Math.acos(Math.max(-1, Math.min(1, (d1.x * d2.x + d1.y * d2.y) / (l1 * l2)))));
-      const error = Math.abs(angle - Math.PI / 2);
-      if (error < 3 * Math.PI / 180 && !constraintExists(compiled, { type: 'perpendicular', a: instance.id, b: other.id } as Constraint)) {
-        candidates.push({
-          score: error * 100,
-          promotion: {
-            kind: 'perpendicular',
-            text: `⊥ Perpendicular(${instance.id}, ${other.id})`,
-            line: `Perpendicular(${instance.id}, ${other.id})`,
-            constraint: { type: 'perpendicular', a: instance.id, b: other.id, soft: false, weight: 1, sourceLine: 0, text: `Perpendicular(${instance.id}, ${other.id})` },
-          },
-        });
+  private aimPins(solver: SolverInstance): void {
+    const dofs = solver.dofs;
+    for (const target of this.targets) {
+      const slot = this.compiled.dofs.find(entry => entry.substanceId === target.substanceId && entry.kind === target.kind);
+      if (!slot) continue;
+      if (target.kind === 'point') solver.setPinTarget(target.substanceId, this.pointer.x - target.grab.x, this.pointer.y - target.grab.y);
+      else {
+        const instance = this.compiled.instances[target.substanceId]!;
+        const centre = this.compiled.dofs.find(entry => entry.substanceId === instance.center);
+        if (!centre) continue;
+        solver.setPinTarget(target.substanceId, Math.max(1, Math.hypot(this.pointer.x - dofs[centre.off]!, this.pointer.y - dofs[centre.off + 1]!) - target.grab.x), 0);
       }
     }
   }
 
-  // Midpoint: the dragged point is near the midpoint of an unrelated segment.
-  for (const instance of compiled.instances.values()) {
-    if (!['segment', 'line', 'ray'].includes(instance.kind)) continue;
-    if (instance.a === substanceId || instance.b === substanceId) continue;
-    const a = pointOf(layout, instance.a!), b = pointOf(layout, instance.b!);
-    const distance = Math.hypot(point.x - (a.x + b.x) / 2, point.y - (a.y + b.y) / 2);
-    if (distance <= snapDistance && !constraintExists(compiled, { type: 'midpoint', point: substanceId, a: instance.a!, b: instance.b! } as Constraint)) {
-      candidates.push({
-        score: distance,
-        promotion: {
-          kind: 'midpoint',
-          text: `⇧ Midpoint(${substanceId}, ${instance.a}, ${instance.b})`,
-          line: `Midpoint(${substanceId}, ${instance.a}, ${instance.b})`,
-          constraint: { type: 'midpoint', point: substanceId, a: instance.a!, b: instance.b!, soft: false, weight: 1, sourceLine: 0, text: `Midpoint(${substanceId}, ${instance.a}, ${instance.b})` },
-        },
-      });
+  /** One animation frame of interactive solving. */
+  frameStep(): DragFrameResult {
+    const started = now();
+    let solver = this.active();
+    this.aimPins(solver);
+    solver.step(this.substeps);
+    let residual = solver.projectManifold(MANIFOLD_SWEEPS);
+    // Topological snap (Shift): preview a temporary constraint.
+    const primary = this.targets[0];
+    const scale = this.frame.scale;
+    const candidate = this.shift && primary?.kind === 'point' ? detectSnap(this.compiled, solver.dofs, primary.substanceId, 10 / Math.max(scale, 1e-6)) : undefined;
+    const key = candidate?.statement ?? '';
+    if (key !== this.snapKey) {
+      this.snapSolver?.dispose();
+      this.snapSolver = undefined;
+      this.snapKey = key;
+      this.snap = candidate;
+      if (candidate) {
+        this.snapSolver = this.instance(withTemporary(this.compiled, candidate));
+        solver = this.snapSolver;
+        this.aimPins(solver);
+        solver.step(this.substeps);
+        residual = solver.projectManifold(MANIFOLD_SWEEPS);
+      }
     }
+    if (now() - started > FRAME_BUDGET_MS && this.substeps > 4) { /* budget exceeded; next frame keeps the same substep count */ }
+    return { dofs: solver.dofs, seeds: encodeSeeds(this.compiled, solver.dofs, this.compiled.bindings), residual, snap: this.snap, elapsedMs: now() - started };
   }
 
-  // On-circle: the dragged point is near the rim of an unrelated circle.
-  for (const instance of compiled.instances.values()) {
-    if (instance.kind !== 'circle') continue;
-    const center = pointOf(layout, instance.center ?? ''), radius = radiusOf(layout, instance.id);
-    const distance = Math.abs(Math.hypot(point.x - center.x, point.y - center.y) - radius);
-    if (distance <= snapDistance && !constraintExists(compiled, { type: 'onCircle', point: substanceId, circle: instance.id } as Constraint)) {
-      candidates.push({
-        score: distance,
-        promotion: {
-          kind: 'onCircle',
-          text: `○ OnCircle(${substanceId}, ${instance.id})`,
-          line: `OnCircle(${substanceId}, ${instance.id})`,
-          constraint: { type: 'onCircle', point: substanceId, circle: instance.id, soft: false, weight: 1, sourceLine: 0, text: `OnCircle(${substanceId}, ${instance.id})` },
-        },
-      });
-    }
+  /** Remove the pointer springs, polish, and return the final seeds. */
+  finish(): { seeds: Record<EntityId, number[]>; residual: number; promoted?: string; changed: boolean } {
+    const solver = this.active();
+    solver.clearPins();
+    solver.step(POLISH_ITERATIONS);
+    const residual = solver.projectManifold(MANIFOLD_SWEEPS * 4);
+    const dofs = Array.from(solver.dofs);
+    const changed = dofs.some((value, index) => Math.abs(value - this.startDofs[index]!) > 1e-9);
+    const result = { seeds: encodeSeeds(this.compiled, dofs, this.compiled.bindings), residual, changed, ...(this.snap ? { promoted: this.snap.statement } : {}) };
+    this.dispose();
+    return result;
   }
 
-  candidates.sort((a, b) => a.score - b.score);
-  return candidates[0]?.promotion ?? null;
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.snapSolver?.dispose();
+    this.solver.dispose();
+  }
 }
 
-function constraintExists(compiled: CompiledScope, candidate: Constraint): boolean {
-  for (const constraint of compiled.constraints) {
-    if (constraint.type !== candidate.type) continue;
-    if (candidate.type === 'midpoint' && constraint.type === 'midpoint') {
-      if (constraint.point === candidate.point && constraint.a === candidate.a && constraint.b === candidate.b) return true;
-    } else if (candidate.type === 'perpendicular' && constraint.type === 'perpendicular') {
-      if ((constraint.a === candidate.a && constraint.b === candidate.b) || (constraint.a === candidate.b && constraint.b === candidate.a)) return true;
-    } else if (candidate.type === 'onCircle' && constraint.type === 'onCircle') {
-      if (constraint.point === candidate.point && constraint.circle === candidate.circle) return true;
-    }
-  }
-  return false;
+/** A drag-only topology: the committed tape plus one temporary constraint. */
+export function withTemporary(compiled: CompiledScope, snap: SnapCandidate): CompiledScope {
+  const tape = [...compiled.tape];
+  const consts = [...compiled.consts, snap.temporary.value, 0];
+  const record = [4, snap.temporary.code, 0, ...snap.temporary.refs, snap.temporary.scalar, consts.length - 2, consts.length - 1];
+  // Records: [magic, version, dofs, count, ...]; constraints may appear anywhere after the DOFs.
+  tape[3] = tape[3]! + 1;
+  tape.push(...record);
+  return { ...compiled, key: `${compiled.key}\u0000snap:${snap.statement}`, tape, consts };
 }
+
+const now = () => typeof performance !== 'undefined' ? performance.now() : Date.now();

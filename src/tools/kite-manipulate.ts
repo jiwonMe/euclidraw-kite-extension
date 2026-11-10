@@ -1,497 +1,368 @@
-import type {
-  ActivationContext, CanvasFrameScheduler, CanvasToolSurface, CanvasToolSurfaceProvider, CompiledScope, EntityId,
-  GizmoHit, MemberPins, MutablePoint, ScopeProps, ScratchOverlay,
-} from '../types.ts';
-import { EXTENSION_ID, MEMBER_ASPECT_ID, SCOPE_ASPECT_ID } from '../manifest.ts';
-import { toLocal, toWorld, scopeBox } from '../geometry.ts';
-import { commitScopePatch } from './documents.ts';
-import { compileCached, solveScope } from '../solver/runtime.ts';
-import { layoutFor, memberPinsFrom, pointOf, radiusOf } from '../solver/solve.ts';
-import { KiteDragSession } from './drag-session.ts';
-
-const IDLE = 'root.select.core.select-suite:idle';
-const POINT_PRIORITY = 45;
-const POINT_HIT_PX = 8;
-const DRAG_SLOP = 3.5;
-const ACCENT = '#6A6CD9';
-
-interface Gesture {
-  pointer: number;
-  clientX: number;
-  clientY: number;
-  startX: number;
-  startY: number;
-  shift: boolean;
-  moved: boolean;
-  scopeId: EntityId;
-  scope: ScopeProps;
-  compiled: CompiledScope;
-  pins: MemberPins;
-  box: ReturnType<typeof scopeBox> & object;
-  instanceId: string;
-  kind: 'point' | 'radius';
-  session: KiteDragSession;
-}
+import type { ActivationContext, CanvasFrameScheduler, CanvasToolSurface, CanvasToolSurfaceProvider, EntityId, GizmoHit, MutablePoint, ScratchOverlay } from '../host.ts';
+import type { CompiledScope } from '../dsl/compile.ts';
+import type { SolvedGeometry } from '../computed-bridge.ts';
+import { handleWorld } from '../aspect-specs.ts';
+import { commitDrag, readScope, selectedIds } from '../documents.ts';
+import { readScopeBox, toLocal } from '../geometry.ts';
+import { COMPUTED, EXTENSION_ID } from '../manifest.ts';
+import { MEMBER_ASPECT, SCOPE_ASPECT, readSolverConfig, type KiteMemberAspect } from '../schema.ts';
+import { DragSession, type DragTarget } from './drag-session.ts';
+import type { SnapCandidate } from './snap.ts';
 
 /**
- * Canvas → solver drag loop for Kite members.
+ * PRD §5.1 / §7.1: canvas → solver drag loop.
  *
- * pointerdown adds a temporary soft pin, frames run the manifold solver inside
- * a ScratchOverlay, and pointerup writes one canonical patch in one Undo group.
- * Reading/rendering never takes this path.
+ * Registers point and radius handles as gizmos above select-suite's own
+ * (priority 45 > resize 10). A press enters `root.select.kite.studio:manipulate`,
+ * moves only a ScratchOverlay patch of `kite.scope.convergedSeeds` from the
+ * host's single frame latch, and commits once on release. Escape, blur,
+ * pointercancel and capture loss discard the overlay without writing.
  */
+
+export const MANIPULATE_STATE = `${EXTENSION_ID}:manipulate`;
+const IDLE = 'root.select.core.select-suite:idle';
+const HANDLE_PRIORITY = 45;
+const HANDLE_RADIUS_PX = 8;
+const SLOP_PX = 3.5;
+
+export interface ManipulatorEvents {
+  /** Fired every frame of a drag and when it ends (Space 2A gizmos read it). */
+  onFrame?(state: DragState | undefined): void;
+  onError?(error: Error): void;
+}
+
+export interface DragState {
+  readonly scopeId: EntityId;
+  readonly compiled: CompiledScope;
+  readonly dofs: Float64Array;
+  readonly frame: SolvedGeometry['frame'];
+  readonly primary: string;
+  readonly snap: SnapCandidate | undefined;
+  readonly residual: number;
+  readonly elapsedMs: number;
+  readonly pointer: { x: number; y: number };
+}
+
+interface Gesture {
+  readonly pointer: number;
+  readonly scopeId: EntityId;
+  readonly startClient: { x: number; y: number };
+  client: { x: number; y: number };
+  shift: boolean;
+  moved: boolean;
+  session: DragSession;
+  last?: DragState;
+}
+
 export class KiteManipulator {
   private readonly owner = `${EXTENSION_ID}:manipulate:${Math.random().toString(36).slice(2, 8)}`;
   private readonly disposers: (() => void)[] = [];
-  private readonly gizmoDisposers: (() => void)[] = [];
-  private bindAbort?: AbortController;
-  private stateDisposer?: () => void;
-  private scratch?: ScratchOverlay;
+  private readonly handleDisposers: (() => void)[] = [];
   private surface?: CanvasToolSurface;
-  private hudSvg?: SVGSVGElement;
-  private locus?: SVGPolylineElement;
-  private badge?: HTMLElement;
+  private surfaceAbort?: AbortController;
+  private stateOff?: () => void;
+  private scratch?: ScratchOverlay;
   private gesture?: Gesture;
-  private selectionKey = '';
+  private handleKey = '';
   private composing = false;
   private compositionEnded = -Infinity;
   private disposed = false;
+  private readonly hit: GizmoHit = { id: '', priority: 0, distanceScreenPx: 0 };
 
-  constructor(private readonly context: ActivationContext) {
+  constructor(private readonly context: ActivationContext, private readonly events: ManipulatorEvents = {}) {
     const provider = context.services.get<CanvasToolSurfaceProvider>('canvas.active-tool-surface');
     if (provider) {
       this.bind(provider.get());
       this.disposers.push(provider.subscribe(() => this.bind(provider.get())));
-    } else {
-      this.bind(fallbackSurface(context));
     }
     const frames = context.services.get<CanvasFrameScheduler>('canvas.frames');
-    this.disposers.push(frames ? frames.subscribe(() => this.tick()) : intervalTick(this.tick, 16));
+    if (frames) this.disposers.push(frames.subscribe(() => this.frame()));
+    this.disposers.push(context.world.subscribe(() => { this.handleKey = ''; }));
   }
+
+  /** The scope whose solved geometry comes from the overlay this frame. */
+  interactiveScope(): EntityId | undefined { return this.gesture?.moved ? this.gesture.scopeId : undefined; }
+  get dragging(): boolean { return Boolean(this.gesture); }
+  /** Wasm solve time of the last interactive frame (ms), for diagnostics/benchmarks. */
+  lastSolveMs = 0;
 
   dispose(): void {
     if (this.disposed) return;
-    this.disposed = true;
     this.cancel();
-    for (const dispose of this.disposers.splice(0).reverse()) dispose();
-    this.releaseSurface();
+    this.disposed = true;
+    for (const off of this.disposers.splice(0).reverse()) off();
+    this.unbind();
   }
 
   private bind(surface: CanvasToolSurface | undefined): void {
-    if (this.disposed) return;
-    if (surface === this.surface) return;
-    this.releaseSurface();
+    if (this.disposed || surface === this.surface) return;
+    this.cancel();
+    this.unbind();
     this.surface = surface;
     if (!surface) return;
+    const element = surface.surface.element, doc = element.ownerDocument;
+    this.surfaceAbort = new (doc.defaultView?.AbortController ?? AbortController)();
+    const signal = this.surfaceAbort.signal;
+    element.addEventListener('pointermove', this.onMove, { capture: true, signal });
+    element.addEventListener('pointerup', this.onUp, { capture: true, signal });
+    element.addEventListener('pointercancel', this.onCancel, { capture: true, signal });
+    element.addEventListener('lostpointercapture', this.onCancel, { capture: true, signal });
+    doc.addEventListener('keydown', this.onKey, { capture: true, signal });
+    doc.addEventListener('keyup', this.onModifier, { capture: true, signal });
+    doc.addEventListener('compositionstart', () => { this.composing = true; this.cancel(); }, { capture: true, signal });
+    doc.addEventListener('compositionend', () => { this.composing = false; this.compositionEnded = now(); }, { capture: true, signal });
+    doc.defaultView?.addEventListener('blur', () => this.cancel(), { signal });
     this.scratch = this.context.world.createScratchOverlay(this.owner);
-    const doc = surface.surface.element.ownerDocument;
-    this.bindAbort = new (surface.surface.element.ownerDocument.defaultView?.AbortController ?? AbortController)();
-    const signal = this.bindAbort.signal;
-    surface.surface.element.addEventListener('pointerdown', this.onPointerDown, { capture: true, signal });
-    surface.surface.element.addEventListener('pointermove', this.onPointerMove, { capture: true, signal });
-    surface.surface.element.addEventListener('pointerup', this.onPointerUp, { capture: true, signal });
-    surface.surface.element.addEventListener('pointercancel', this.onPointerCancel, { capture: true, signal });
-    surface.surface.element.addEventListener('lostpointercapture', this.onPointerCancel, { capture: true, signal });
-    doc.addEventListener('keydown', this.onKeyDown, { capture: true, signal });
-    doc.addEventListener('compositionstart', this.onCompositionStart, { signal });
-    doc.addEventListener('compositionend', this.onCompositionEnd, { signal });
-    doc.defaultView?.addEventListener('blur', this.cancel, { signal });
-    this.stateDisposer = surface.selection.stateMachine.mountChildState('root.select', { id: `${EXTENSION_ID}:manipulate`, onExit: () => this.cancel() });
-    this.buildHud(surface);
-    this.rebuildGizmos();
+    try {
+      this.stateOff = surface.selection.stateMachine.mountChildState('root.select', {
+        id: MANIPULATE_STATE,
+        onExit: () => { if (this.gesture) this.cancel(); },
+        onModifiersChanged: (_context, modifiers) => { if (this.gesture) this.gesture.shift = modifiers.shift; },
+      });
+    } catch { this.stateOff = undefined; }
+    this.handleKey = '';
   }
 
-  private releaseSurface(): void {
-    this.bindAbort?.abort();
-    this.bindAbort = undefined;
-    this.stateDisposer?.();
-    this.stateDisposer = undefined;
-    for (const dispose of this.gizmoDisposers.splice(0)) dispose();
+  private unbind(): void {
+    for (const off of this.handleDisposers.splice(0)) off();
+    this.surfaceAbort?.abort();
+    this.surfaceAbort = undefined;
+    this.stateOff?.();
+    this.stateOff = undefined;
     this.scratch?.dispose();
     this.scratch = undefined;
-    this.hudSvg?.remove();
-    this.hudSvg = undefined;
-    this.locus = undefined;
-    this.badge?.remove();
-    this.badge = undefined;
     this.surface = undefined;
-    this.gesture = undefined;
   }
 
-  private buildHud(surface: CanvasToolSurface): void {
-    const doc = surface.surface.element.ownerDocument;
-    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
-    svg.dataset.role = 'kite-locus';
-    svg.setAttribute('aria-hidden', 'true');
-    svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:4;';
-    const line = doc.createElementNS('http://www.w3.org/2000/svg', 'polyline') as SVGPolylineElement;
-    line.setAttribute('fill', 'none');
-    line.setAttribute('stroke', ACCENT);
-    line.setAttribute('stroke-width', '1.5');
-    line.setAttribute('stroke-dasharray', '5 5');
-    line.setAttribute('stroke-opacity', '0.85');
-    svg.append(line);
-    surface.surface.hud.append(svg);
-    this.hudSvg = svg;
-    this.locus = line;
-    const badge = doc.createElement('div');
-    badge.dataset.role = 'kite-snap-badge';
-    badge.style.cssText = 'position:absolute;pointer-events:none;padding:4px 8px;border-radius:6px;background:rgba(17,24,39,0.92);color:#f8fafc;font:600 11px/1.35 system-ui,-apple-system,sans-serif;white-space:nowrap;display:none;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,0.25);';
-    surface.surface.hud.append(badge);
-    this.badge = badge;
-  }
+  // ── handles ─────────────────────────────────────────────────────────────
 
-  // ── gizmos ──────────────────────────────────────────────────────────────
-
-  private editableTarget(): { scopeId: EntityId; substanceIds: Set<string>; circles: Set<string> } | undefined {
+  /** Members (and their defining points) the current selection exposes. */
+  private editable(): { scopeId: EntityId; ids: Set<string> } | undefined {
     if (!this.surface) return undefined;
-    const ids = this.surface.selection.getSelection();
-    for (const id of ids) {
-      const scope = this.context.world.getCanonical<ScopeProps>(id, SCOPE_ASPECT_ID);
-      if (scope) {
-        const compiled = compileCached(scope);
-        return { scopeId: id, substanceIds: new Set([...compiled.instances.values()].filter(instance => instance.kind === 'point').map(instance => instance.id)), circles: new Set([...compiled.instances.values()].filter(instance => instance.kind === 'circle').map(instance => instance.id)) };
-      }
-    }
-    const substanceIds = new Set<string>();
-    const circles = new Set<string>();
+    const world = this.context.world;
     let scopeId: EntityId | undefined;
-    for (const id of ids) {
-      const member = this.context.world.getCanonical<{ scopeId?: string; substanceId?: string }>(id, MEMBER_ASPECT_ID);
-      if (!member?.scopeId || !member.substanceId) continue;
-      const scope = this.context.world.getCanonical<ScopeProps>(member.scopeId, SCOPE_ASPECT_ID);
-      if (!scope) continue;
-      scopeId = member.scopeId;
-      const compiled = compileCached(scope);
-      const instance = compiled.instances.get(member.substanceId);
+    const ids = new Set<string>();
+    for (const id of this.surface.selection.getSelection()) {
+      const member = world.getCanonical<KiteMemberAspect>(id, MEMBER_ASPECT);
+      const scope = member ? member.scopeId : world.getCanonical(id, SCOPE_ASPECT) ? id : undefined;
+      if (!scope || (scopeId && scope !== scopeId)) continue;
+      scopeId = scope;
+      const compiled = world.getComputed<CompiledScope>(scope, COMPUTED.compiledVm);
+      if (!compiled?.ok) continue;
+      if (!member) { for (const slot of compiled.dofs) ids.add(slot.substanceId); continue; }
+      const instance = compiled.instances[member.substanceId];
       if (!instance) continue;
-      for (const key of ['a', 'b', 'center'] as const) if (instance[key]) substanceIds.add(instance[key]!);
-      for (const point of instance.points ?? []) substanceIds.add(point);
-      for (const point of instance.angle ?? []) substanceIds.add(point);
-      if (instance.label?.anchor.id) substanceIds.add(instance.label.anchor.id);
-      if (instance.kind === 'point') substanceIds.add(instance.id);
-      if (instance.kind === 'circle') circles.add(instance.id);
-      if (instance.kind === 'arc') substanceIds.add(instance.center ?? '');
+      if (instance.kind === 'point' || instance.kind === 'circle' || instance.kind === 'arc') ids.add(instance.id);
+      for (const ref of [instance.a, instance.b, instance.center, instance.through, ...(instance.vertices ?? []), ...(instance.angle ?? [])]) if (ref) ids.add(ref);
     }
-    return scopeId ? { scopeId, substanceIds, circles } : undefined;
+    return scopeId && ids.size ? { scopeId, ids } : undefined;
   }
 
-  private rebuildGizmos(): void {
-    for (const dispose of this.gizmoDisposers.splice(0)) dispose();
+  private rebuildHandles(): void {
     const surface = this.surface;
-    const target = this.editableTarget();
-    if (!surface || !target) return;
-    const scope = this.context.world.getCanonical<ScopeProps>(target.scopeId, SCOPE_ASPECT_ID);
-    if (!scope) return;
-    const compiled = compileCached(scope);
-    for (const id of target.substanceIds) {
-      if (!compiled.instances.has(id)) continue;
-      const gizmoId = `${this.owner}|p|${target.scopeId}|${id}`;
-      this.gizmoDisposers.push(surface.selection.gizmos.register({
-        id: gizmoId,
-        priority: POINT_PRIORITY,
+    const target = this.editable();
+    const key = target ? `${target.scopeId}:${[...target.ids].sort().join(',')}` : '';
+    if (key === this.handleKey) return;
+    this.handleKey = key;
+    for (const off of this.handleDisposers.splice(0)) off();
+    if (!surface || !target || this.context.world.isEntityReadOnly(target.scopeId)) return;
+    for (const substanceId of target.ids) {
+      this.handleDisposers.push(surface.selection.gizmos.register({
+        id: `${this.owner}|${target.scopeId}|${substanceId}`,
+        priority: HANDLE_PRIORITY,
         shape: 'circle',
-        radiusScreenPx: POINT_HIT_PX,
-        getWorldPosition: out => this.handleWorld(target.scopeId, id, undefined, out),
-        onPointerDown: event => this.begin(target.scopeId, id, 'point', event),
-      }));
-    }
-    for (const id of target.circles) {
-      if (!compiled.instances.has(id)) continue;
-      const gizmoId = `${this.owner}|r|${target.scopeId}|${id}`;
-      this.gizmoDisposers.push(surface.selection.gizmos.register({
-        id: gizmoId,
-        priority: POINT_PRIORITY,
-        shape: 'circle',
-        radiusScreenPx: POINT_HIT_PX,
-        getWorldPosition: out => this.handleWorld(target.scopeId, id, 'radius', out),
-        onPointerDown: event => this.begin(target.scopeId, id, 'radius', event),
+        radiusScreenPx: HANDLE_RADIUS_PX,
+        getWorldPosition: (out: MutablePoint) => this.handlePosition(target.scopeId, substanceId, out),
+        onPointerDown: (event: PointerEvent) => this.begin(target.scopeId, substanceId, event),
       }));
     }
   }
 
-  private handleWorld(scopeId: EntityId, instanceId: string, kind: 'radius' | undefined, out: MutablePoint): boolean {
-    const scope = this.context.world.getCanonical<ScopeProps>(scopeId, SCOPE_ASPECT_ID);
-    const box = scopeBox(scopeId, this.context.world.getCanonicalView());
-    if (!scope || !box || this.context.world.isEntityReadOnly(scopeId)) return false;
-    const compiled = compileCached(scope);
-    const solved = solveScope(scope, this.context.world.getCanonicalView());
-    const layout = layoutFor(compiled, solved.pins);
-    layout.values.set(solved.state.values);
-    if (kind === 'radius') {
-      const center = pointOf(layout, compiled.instances.get(instanceId)?.center ?? '');
-      const world = toWorld(box, center.x + radiusOf(layout, instanceId), center.y);
-      out.x = world.x; out.y = world.y;
-    } else {
-      const point = pointOf(layout, instanceId);
-      const world = toWorld(box, point.x, point.y);
-      out.x = world.x; out.y = world.y;
-    }
+  private handlePosition(scopeId: EntityId, substanceId: string, out: MutablePoint): boolean {
+    const view = this.context.world.getPreviewView();
+    const compiled = view.getComputed<CompiledScope>(scopeId, COMPUTED.compiledVm);
+    const solved = view.getComputed<SolvedGeometry>(scopeId, COMPUTED.solvedGeometry);
+    const point = compiled && solved ? handleWorld(compiled, solved, substanceId) : undefined;
+    if (!point) return false;
+    out.x = point.x; out.y = point.y;
     return true;
   }
 
-  // ── gesture lifecycle ──────────────────────────────────────────────────
+  /** Programmatic hit test for hosts whose gizmo dispatch is not wired (tests, embeds). */
+  hitHandle(clientX: number, clientY: number, event: PointerEvent): boolean {
+    const surface = this.surface;
+    if (!surface) return false;
+    this.rebuildHandles();
+    if (!surface.selection.gizmos.hitTest(clientX, clientY, surface.host.worldToScreen, this.hit) || !this.hit.id.startsWith(`${this.owner}|`)) return false;
+    const [, scopeId, substanceId] = this.hit.id.split('|');
+    return Boolean(scopeId && substanceId && this.begin(scopeId, substanceId, event));
+  }
 
-  private readonly onPointerDown = (event: PointerEvent) => {
-    if (this.gesture || event.button !== 0 || event.defaultPrevented || this.imeLocked() || this.surface?.host.isPanGesture?.(event) || this.surface?.host.isSelectionEnabled?.() === false) return;
-    if (inputOwned(event)) return;
-    const hit = { id: '', priority: 0, distanceScreenPx: 0 } as GizmoHit;
-    if (this.surface?.selection.gizmos.hitTest(event.clientX, event.clientY, this.surface.host.worldToScreen, hit)) {
-      const [, kind, scopeId, instanceId] = hit.id.split('|');
-      if (hit.id.startsWith(`${this.owner}|`) && scopeId && instanceId) {
-        const parsedKind = kind === 'r' ? 'radius' : 'point';
-        if (this.begin(scopeId, instanceId, parsedKind, event)) return;
-      }
-    }
-    // Hosts without a gizmo registry still get direct point dragging.
-    const target = this.editableTarget();
-    if (!target) return;
-    const scope = this.context.world.getCanonical<ScopeProps>(target.scopeId, SCOPE_ASPECT_ID);
-    const box = scopeBox(target.scopeId, this.context.world.getCanonicalView());
-    if (!scope || !box) return;
-    const worldPoint = { x: 0, y: 0 };
-    this.surface!.host.screenToWorld(event.clientX, event.clientY, worldPoint);
-    const local = toLocal(box, worldPoint.x, worldPoint.y);
-    const compiled = compileCached(scope);
-    const solved = solveScope(scope, this.context.world.getCanonicalView());
-    const layout = layoutFor(compiled, solved.pins);
-    layout.values.set(solved.state.values);
-    const threshold = POINT_HIT_PX / Math.max(0.001, this.surface!.host.getZoom());
-    let nearest: { id: string; distance: number } | undefined;
-    for (const id of target.substanceIds) {
-      const point = pointOf(layout, id);
-      const distance = Math.hypot(point.x - local.x, point.y - local.y);
-      if (distance <= threshold && (!nearest || distance < nearest.distance)) nearest = { id, distance };
-    }
-    if (nearest) this.begin(target.scopeId, nearest.id, 'point', event);
-  };
+  // ── gesture ─────────────────────────────────────────────────────────────
 
-  private begin(scopeId: EntityId, instanceId: string, kind: 'point' | 'radius', event: PointerEvent): boolean {
-    if (!this.surface || this.gesture) return false;
-    const scope = this.context.world.getCanonical<ScopeProps>(scopeId, SCOPE_ASPECT_ID);
-    const box = scopeBox(scopeId, this.context.world.getCanonicalView());
-    if (!scope || !box || this.context.world.isEntityReadOnly(scopeId)) return false;
-    const compiled = compileCached(scope);
-    if (!compiled.ok) { this.report(new Error(compiled.errors[0]?.message ?? 'Kite DSL 오류')); return false; }
-    const pins = memberPinsFrom(compiled, this.context.world.getCanonicalView());
-    const parsedScope: ScopeProps = { ...scope, solverConfig: { ...scope.solverConfig } };
-    const session = new KiteDragSession(parsedScope, compiled, pins, instanceId, kind);
-    this.gesture = {
-      pointer: event.pointerId,
-      clientX: event.clientX, clientY: event.clientY,
-      startX: event.clientX, startY: event.clientY,
-      shift: event.shiftKey, moved: false,
-      scopeId, scope: parsedScope, compiled, pins, box, instanceId, kind, session,
-    };
-    this.surface.selection.stateMachine.transition(`root.select.${EXTENSION_ID}:manipulate`);
-    this.surface.surface.element.setPointerCapture?.(event.pointerId);
-    this.updateBadge();
+  private imeLocked(event?: KeyboardEvent | PointerEvent): boolean {
+    return this.composing || now() - this.compositionEnded < 16 || Boolean(event && 'isComposing' in event && (event.isComposing || (event as KeyboardEvent).keyCode === 229 || (event as KeyboardEvent).key === 'Process'));
+  }
+
+  begin(scopeId: EntityId, substanceId: string, event: PointerEvent): boolean {
+    const surface = this.surface;
+    const world = this.context.world;
+    if (!surface || this.gesture || event.button !== 0 || this.imeLocked() || event.getModifierState?.('AltGraph')) return false;
+    if (surface.host.isSelectionEnabled?.() === false || surface.host.isPanGesture?.(event) || world.isEntityReadOnly(scopeId)) return false;
+    const view = world.getCanonicalView();
+    const compiled = view.getComputed<CompiledScope>(scopeId, COMPUTED.compiledVm);
+    const solved = view.getComputed<SolvedGeometry>(scopeId, COMPUTED.solvedGeometry);
+    const scope = readScope(world, scopeId);
+    if (!compiled?.ok || !solved || !scope) return false;
+    const pointer = { x: 0, y: 0 };
+    surface.host.screenToWorld(event.clientX, event.clientY, pointer);
+    const local = toLocal(solved.frame, pointer.x, pointer.y);
+    // Multi-selection drags every selected point together (rigid translation
+    // as far as the constraints allow); otherwise just the grabbed DOF.
+    const targets: DragTarget[] = [];
+    const selected = this.selectedPoints(scopeId, compiled);
+    const pinsOf = (id: string) => world.getCanonical<KiteMemberAspect>(compiled.bindings[id] ?? '', MEMBER_ASPECT);
+    const ids = selected.includes(substanceId) ? selected : [substanceId];
+    for (const id of ids.slice(0, 8)) {
+      const slot = compiled.dofs.find(entry => entry.substanceId === id);
+      if (!slot || slot.fixed) continue;
+      const member = pinsOf(id);
+      if ((member?.pinnedDofs?.length ?? 0) >= (slot.kind === 'point' ? 2 : 1)) continue;
+      const grab = slot.kind === 'point'
+        ? { x: local.x - solved.dofs[slot.off]!, y: local.y - solved.dofs[slot.off + 1]! }
+        : { x: radiusGrab(compiled, solved, id, local), y: 0 };
+      targets.push({ substanceId: id, kind: slot.kind, grab, slackWeight: Number(member?.slackWeight) > 0 ? Number(member!.slackWeight) : 1 });
+    }
+    if (!targets.length) return false;
+    const pins: number[] = [];
+    for (const slot of compiled.dofs) for (const local of pinsOf(slot.substanceId)?.pinnedDofs ?? []) if (Number.isInteger(local) && local >= 0 && local < (slot.kind === 'point' ? 2 : 1)) pins.push(slot.off + local);
+    const config = readSolverConfig(scope.solverConfig);
+    const session = new DragSession(compiled, solved.frame, solved.dofs, pins, targets, config.maxSubstepsPerFrame, config.damping, pointer);
+    this.gesture = { pointer: event.pointerId, scopeId, startClient: { x: event.clientX, y: event.clientY }, client: { x: event.clientX, y: event.clientY }, shift: event.shiftKey && config.autoPromoteSnap, moved: false, session };
+    try { surface.selection.stateMachine.transition(`root.select.${MANIPULATE_STATE}`); } catch { /* host without this slot */ }
+    try { surface.surface.element.setPointerCapture?.(event.pointerId); } catch { /* synthetic pointer */ }
     event.preventDefault();
     event.stopImmediatePropagation();
     return true;
   }
 
-  private readonly onPointerMove = (event: PointerEvent) => {
+  private selectedPoints(scopeId: EntityId, compiled: CompiledScope): string[] {
+    const world = this.context.world;
+    const out: string[] = [];
+    for (const id of selectedIds(this.context)) {
+      const member = world.getCanonical<KiteMemberAspect>(id, MEMBER_ASPECT);
+      if (member?.scopeId === scopeId && compiled.dofs.some(slot => slot.substanceId === member.substanceId)) out.push(member.substanceId);
+    }
+    return out;
+  }
+
+  private readonly onMove = (event: PointerEvent) => {
     const gesture = this.gesture;
     if (!gesture || gesture.pointer !== event.pointerId) return;
-    gesture.clientX = event.clientX; gesture.clientY = event.clientY;
-    gesture.shift = event.shiftKey;
-    gesture.moved ||= Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >= DRAG_SLOP;
-    this.updateBadge();
+    gesture.client = { x: event.clientX, y: event.clientY };
+    const config = readSolverConfig(readScope(this.context.world, gesture.scopeId)?.solverConfig);
+    gesture.shift = event.shiftKey && config.autoPromoteSnap;
+    gesture.moved ||= Math.hypot(event.clientX - gesture.startClient.x, event.clientY - gesture.startClient.y) >= SLOP_PX;
+    // Input only records the target; solving happens in the frame latch.
+    this.surface?.host.requestRender();
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
-  private readonly onPointerUp = (event: PointerEvent) => {
+  private readonly onUp = (event: PointerEvent) => {
     const gesture = this.gesture;
     if (!gesture || gesture.pointer !== event.pointerId) return;
-    gesture.clientX = event.clientX; gesture.clientY = event.clientY;
-    gesture.moved ||= Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >= DRAG_SLOP;
-    if (gesture.moved) this.applyGesture();
+    gesture.client = { x: event.clientX, y: event.clientY };
+    gesture.moved ||= Math.hypot(event.clientX - gesture.startClient.x, event.clientY - gesture.startClient.y) >= SLOP_PX;
+    if (gesture.moved) this.advance(gesture);
     const result = gesture.session.finish();
-    const substanceChanged = result.substanceDsl !== gesture.scope.substanceDsl;
-    this.finishGesture();
-    if (gesture.moved && (substanceChanged || JSON.stringify(result.seeds) !== JSON.stringify(gesture.scope.convergedSeeds))) {
-      const patch: Record<string, unknown> = { convergedSeeds: result.seeds };
-      if (substanceChanged) patch.substanceDsl = result.substanceDsl;
-      try {
-        commitScopePatch(this.context, gesture.scopeId, patch, 'manipulate');
-      } catch (error) {
-        this.report(error instanceof Error ? error : new Error(String(error)));
-      }
+    this.end(gesture);
+    if (gesture.moved && (result.changed || result.promoted)) {
+      try { commitDrag(this.context, gesture.scopeId, result.seeds, result.promoted); }
+      catch (error) { this.report(error); }
     }
     this.surface?.host.requestRender();
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
-  private readonly onPointerCancel = (event: PointerEvent) => {
-    if (this.gesture && this.gesture.pointer !== event.pointerId) return;
-    this.cancel();
+  private readonly onCancel = (event: PointerEvent) => { if (this.gesture?.pointer === event.pointerId) this.cancel(); };
+
+  private readonly onKey = (event: KeyboardEvent) => {
+    if (!this.gesture || this.imeLocked(event)) return;
+    if (event.key === 'Escape') { this.cancel(); event.preventDefault(); event.stopImmediatePropagation(); return; }
+    this.onModifier(event);
   };
 
-  private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || !this.gesture || this.imeLocked(event)) return;
-    this.cancel();
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-
-  private readonly onCompositionStart = () => { this.composing = true; };
-  private readonly onCompositionEnd = () => { this.composing = false; this.compositionEnded = performance.now(); };
-
-  private cancel = (): void => {
-    if (!this.gesture) return;
-    this.finishGesture();
+  private readonly onModifier = (event: KeyboardEvent) => {
+    if (!this.gesture || this.imeLocked(event) || event.getModifierState?.('AltGraph')) return;
+    this.gesture.shift = event.shiftKey;
     this.surface?.host.requestRender();
   };
 
-  private finishGesture(): void {
+  cancel(): void {
     const gesture = this.gesture;
+    if (!gesture) return;
+    gesture.session.dispose();
+    this.end(gesture);
+    this.surface?.host.requestRender();
+  }
+
+  private end(gesture: Gesture): void {
     this.gesture = undefined;
     this.scratch?.clear();
-    this.locus?.setAttribute('points', '');
-    if (this.badge) this.badge.style.display = 'none';
-    if (this.surface) {
-      try { this.surface.selection.stateMachine.transition(IDLE); } catch { /* other tool owns the state */ }
-      if (gesture) {
-        try { this.surface.surface.element.releasePointerCapture?.(gesture.pointer); } catch { /* already released */ }
-      }
-    }
+    try { this.surface?.surface.element.releasePointerCapture?.(gesture.pointer); } catch { /* released */ }
+    try { if (this.surface?.selection.stateMachine.stateId.endsWith(MANIPULATE_STATE)) this.surface.selection.stateMachine.transition(IDLE); } catch { /* idle not mounted */ }
+    this.events.onFrame?.(undefined);
   }
 
-  private tick(): void {
-    if (this.disposed || !this.surface) return;
-    const key = this.surface.selection.getSelection().join(',');
-    if (key !== this.selectionKey) { this.selectionKey = key; this.rebuildGizmos(); }
-    if (this.gesture?.moved) this.applyGesture();
+  /** Host frame latch: solve, write the overlay, notify the gizmo planes. */
+  frame(): void {
+    if (this.disposed) return;
+    if (!this.gesture) { this.rebuildHandles(); return; }
+    if (this.gesture.moved) this.advance(this.gesture);
   }
 
-  private applyGesture(): void {
-    const gesture = this.gesture;
-    if (!gesture || !this.surface) return;
-    const worldPoint = { x: 0, y: 0 };
-    this.surface.host.screenToWorld(gesture.clientX, gesture.clientY, worldPoint);
-    const local = toLocal(gesture.box, worldPoint.x, worldPoint.y);
-    const snap = 14 / Math.max(0.001, this.surface.host.getZoom());
-    const frame = gesture.session.moveTo(local.x, local.y, gesture.shift, snap);
-    this.scratch?.set(gesture.scopeId, SCOPE_ASPECT_ID, { convergedSeeds: frame.seeds });
-    this.updateLocus();
-    this.updateBadge();
-    this.surface.host.requestRender();
+  private advance(gesture: Gesture): void {
+    const surface = this.surface;
+    if (!surface) return;
+    const pointer = { x: 0, y: 0 };
+    surface.host.screenToWorld(gesture.client.x, gesture.client.y, pointer);
+    gesture.session.update(pointer, gesture.shift);
+    let result;
+    try { result = gesture.session.frameStep(); }
+    catch (error) { this.report(error); this.cancel(); return; }
+    this.lastSolveMs = result.elapsedMs;
+    this.scratch?.set(gesture.scopeId, SCOPE_ASPECT, { convergedSeeds: result.seeds });
+    gesture.last = {
+      scopeId: gesture.scopeId, compiled: gesture.session.compiled, dofs: Float64Array.from(result.dofs),
+      frame: frameOf(this.context, gesture.scopeId, gesture.session.compiled), primary: gesture.session.targets[0]!.substanceId,
+      snap: result.snap, residual: result.residual, elapsedMs: result.elapsedMs, pointer,
+    };
+    this.events.onFrame?.(gesture.last);
   }
 
-  private updateBadge(): void {
-    const gesture = this.gesture;
-    if (!this.badge || !this.surface) return;
-    if (!gesture || !gesture.moved) { this.badge.style.display = 'none'; return; }
-    const promotion = gesture.session.currentPromotion();
-    this.badge.textContent = promotion ? promotion.text : `Kite · ${gesture.instanceId}`;
-    this.badge.style.display = 'block';
-    const hud = this.surface.surface.hud.getBoundingClientRect();
-    const element = this.surface.surface.element.getBoundingClientRect();
-    this.badge.style.left = `${gesture.clientX - (hud.width ? hud.left : element.left) + 14}px`;
-    this.badge.style.top = `${gesture.clientY - (hud.width ? hud.top : element.top) - 30}px`;
-    this.badge.style.color = promotion ? '#fef3c7' : '#f8fafc';
-  }
-
-  private updateLocus(): void {
-    const gesture = this.gesture;
-    if (!gesture || !this.locus || !this.surface) return;
-    const points = locusPoints(gesture, this.surface);
-    this.locus.setAttribute('points', points);
-  }
-
-  private imeLocked(event?: KeyboardEvent): boolean {
-    return this.composing || Boolean(event && (event.isComposing || event.keyCode === 229 || event.key === 'Process')) || performance.now() - this.compositionEnded < 16;
-  }
-
-  private report(error: Error): void {
-    this.surface?.host.onError?.(error);
+  private report(error: unknown): void {
+    const value = error instanceof Error ? error : new Error(String(error));
+    this.events.onError?.(value);
+    this.surface?.host.onError?.(value);
   }
 }
 
-function locusPoints(gesture: Gesture, surface: CanvasToolSurface): string {
-  const layout = layoutFor(gesture.compiled, gesture.pins);
-  layout.values.set(gesture.session.currentState().values);
-  const samples: { x: number; y: number }[] = [];
-  const viewPoint = { x: 0, y: 0 };
-  const hud = surface.surface.hud.getBoundingClientRect(), element = surface.surface.element.getBoundingClientRect();
-  const offsetX = hud.width ? hud.left : element.left, offsetY = hud.width ? hud.top : element.top;
-  const push = (local: { x: number; y: number }) => {
-    const world = toWorld(gesture.box, local.x, local.y);
-    surface.host.worldToScreen(world.x, world.y, viewPoint);
-    samples.push({ x: viewPoint.x - offsetX, y: viewPoint.y - offsetY });
-  };
-  for (const constraint of gesture.compiled.constraints) {
-    if (constraint.type === 'onCircle' && constraint.point === gesture.instanceId) {
-      const center = pointOf(layout, gesture.compiled.instances.get(constraint.circle)?.center ?? ''), radius = radiusOf(layout, constraint.circle);
-      for (let index = 0; index <= 72; index++) {
-        const angle = index / 72 * Math.PI * 2;
-        push({ x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius });
-      }
-      break;
-    }
-    if (constraint.type === 'distance' && (constraint.a === gesture.instanceId || constraint.b === gesture.instanceId)) {
-      const other = constraint.a === gesture.instanceId ? constraint.b : constraint.a;
-      const center = pointOf(layout, other);
-      for (let index = 0; index <= 72; index++) {
-        const angle = index / 72 * Math.PI * 2;
-        push({ x: center.x + Math.cos(angle) * constraint.value, y: center.y + Math.sin(angle) * constraint.value });
-      }
-      break;
-    }
-    if ((constraint.type === 'horizontal' || constraint.type === 'vertical') && !samples.length) {
-      const instance = gesture.compiled.instances.get(constraint.segment);
-      if (!instance || (instance.a !== gesture.instanceId && instance.b !== gesture.instanceId)) continue;
-      const point = pointOf(layout, gesture.instanceId);
-      if (constraint.type === 'horizontal') { push({ x: 0, y: point.y }); push({ x: gesture.box.width, y: point.y }); }
-      else { push({ x: point.x, y: 0 }); push({ x: point.x, y: gesture.box.height }); }
-      break;
-    }
-  }
-  return samples.map(point => `${Math.round(point.x * 10) / 10},${Math.round(point.y * 10) / 10}`).join(' ');
+function radiusGrab(compiled: CompiledScope, solved: SolvedGeometry, id: string, local: { x: number; y: number }): number {
+  const instance = compiled.instances[id]!;
+  const centre = compiled.dofs.find(entry => entry.substanceId === instance.center);
+  const radius = compiled.dofs.find(entry => entry.substanceId === id);
+  if (!centre || !radius) return 0;
+  return Math.hypot(local.x - solved.dofs[centre.off]!, local.y - solved.dofs[centre.off + 1]!) - solved.dofs[radius.off]!;
 }
 
-function fallbackSurface(context: ActivationContext): CanvasToolSurface | undefined {
-  const shell = context.services.get<{ element?: HTMLElement; hud?: HTMLElement }>('canvas.surface');
-  const interaction = context.services.get<{
-    screenToWorld?(x: number, y: number, out: MutablePoint): void;
-    worldToScreen?(x: number, y: number, out: MutablePoint): void;
-    getZoom?(): number;
-    requestRender?(): void;
-    history?: { begin(): void; commit(): void; abort(): void };
-    onSelectionChanged?(ids: readonly EntityId[]): void;
-  }>('canvas.interaction');
-  let suite: { getSelection?(): readonly EntityId[]; select?(id: EntityId | null): void } | undefined;
-  try { suite = context.services.get('canvas.selection'); } catch { suite = undefined; }
-  if (!shell?.element || !shell.hud) return undefined;
-  return {
-    surface: { element: shell.element, hud: shell.hud },
-    selection: {
-      stateMachine: { stateId: 'root', mountChildState: () => () => {}, transition: () => {} },
-      gizmos: { register: () => () => {}, hitTest: () => false },
-      getSelection: () => [...(suite?.getSelection?.() ?? [])],
-      select: id => suite?.select?.(id),
-    },
-    host: {
-      screenToWorld: (x, y, out) => interaction?.screenToWorld?.(x, y, out),
-      worldToScreen: (x, y, out) => interaction?.worldToScreen?.(x, y, out),
-      getZoom: () => interaction?.getZoom?.() ?? 1,
-      requestRender: () => interaction?.requestRender?.(),
-      history: interaction?.history ?? { begin() {}, commit() {}, abort() {} },
-      onError: error => console.error('[kite]', error),
-    },
-  };
+function frameOf(context: ActivationContext, scopeId: EntityId, compiled: CompiledScope): SolvedGeometry['frame'] {
+  const solved = context.world.getCanonicalView().getComputed<SolvedGeometry>(scopeId, COMPUTED.solvedGeometry);
+  if (solved) return solved.frame;
+  const box = readScopeBox(context.world.getCanonicalView(), scopeId)!;
+  const scale = Math.min(box.width / compiled.canvas.width, box.height / compiled.canvas.height);
+  return { cx: box.x + box.width / 2, cy: box.y + box.height / 2, scale, rotation: box.rotation, ox: compiled.canvas.width / 2, oy: compiled.canvas.height / 2, halfW: box.width / 2 / scale, halfH: box.height / 2 / scale };
 }
 
-function inputOwned(event: Event): boolean {
-  const blocked = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('[data-canvas-ui],button,input,textarea,select,[contenteditable]:not([contenteditable="false"])'));
-  return blocked(event.target) || event.composedPath().some(blocked);
-}
-
-function intervalTick(run: () => void, ms: number): () => void {
-  const id = setInterval(run, ms);
-  return () => clearInterval(id);
-}
-
+const now = () => typeof performance !== 'undefined' ? performance.now() : Date.now();

@@ -1,173 +1,94 @@
 # EucliDraw Kite Studio 확장 (`jiwonme/euclidraw-kite-extension`)
 
-[Kite](https://github.com/jiwonMe/kite)의 **Domain · Substance · Style** 3분할 선언과 다양체 정사영 솔버를 EucliDraw/alid 캔버스의 표준 확장으로 옮긴 프로젝트입니다. 하나의 다이어그램을 블랙박스 노드로 가두지 않고, 상위 `kite.scope`와 개별 `kite.member` 엔티티로 나누어 기존 선택·연결선·벡터 출판 생태계와 함께 쓸 수 있게 합니다.
+alid(EucliDraw) 캔버스용 **Kite Studio** 확장(`kite.studio` 0.2.0)입니다. Domain · Substance · Style 세 DSL로 기하 도해를 선언하면, 확장이 직접 가진 **Wasm SIMD 솔버**(`crate-kite-solver`)가 구속 다양체 위로 정사영해 배치합니다. 점 · 선분 · 직선 · 반직선 · 원 · 호 · 다각형 · 각도 표시 · 라벨이 각각 **일급 캔버스 엔티티**(PRD의 패턴 A 서브그래프)라서 선택, 연결선, 클립보드, SVG 내보내기가 다른 도형처럼 동작합니다.
 
-- **정본**: `kite.scope`(세 DSL, `entityBindings`, `convergedSeeds`, 솔버 설정) + `kite.member`(점·선분·원·호·다각형·각도·라벨)
-- **솔버**: 결정론적 XPBD/다양체 정사영. 포인터를 원 밖으로 끌어도 구속된 점은 원주 위로 투영됩니다.
-- **조작**: 드래그 중에는 `ScratchOverlay`만 갱신하고, `pointerup`에서 정확히 한 번의 정본 패치를 기록합니다.
-- **출판**: DOM·`<foreignObject>` 없이 순수 SVG 문자열을 반환합니다.
-- **워크벤치**: Tri-DSL 인스펙터 패널과 DOF/잔차 진단 패널.
-- **명령**: `M-x`에서 `Kite`로 검색해 생성·구속·수렴·고정·바인딩 복구를 실행합니다.
-
-> 이 저장소의 소스는 **TypeScript**입니다. 배포 산출물만 `dist/plugin.js`(단일 ESM)로 빌드되며, `dist/plugin.js`와 `alid.extension.json`은 Git에 함께 커밋합니다.
-
----
+- 커널과 Rust 코어는 바꾸지 않습니다. 모든 기능은 공개 확장 계약으로 들어갑니다.
+- 소스는 TypeScript와 Rust입니다. 배포물은 하나의 ESM(`dist/plugin.js`, Wasm을 base64로 내장, 런타임 import 없음)과 `alid.extension.json`입니다.
+- 정본에는 의도(DSL)와 마지막 수렴 시드만 저장합니다. 화면 기하는 전부 계산 그래프가 파생합니다.
 
 ## 설치
 
-EucliDraw/alid의 **확장 관리 → GitHub에서 설치**에 다음을 입력합니다.
+1. alid → 확장 관리 → "저장소에서 설치"에 `jiwonme/euclidraw-kite-extension`을 입력합니다.
+2. 설치기는 `alid.extension.json`의 `sha256`으로 `dist/plugin.js`를 검증합니다.
+3. 선택 의존성: `core.select-suite`, `core.clipboard`, `sys.minibuffer`, `doc.markdown-math`, `vector.pen-suite`. 없으면 해당 기능만 꺼집니다(예: `vector.path`가 없으면 베이킹 불가, `markdown.card`가 없으면 `card` 라벨을 SVG 텍스트로 그림).
 
-```text
-jiwonme/euclidraw-kite-extension
-```
-
-설치 후 왼쪽 도구 선반의 **Kite 다이어그램** 버튼, 또는 명령 팔레트의 `Kite 다이어그램 추가`로 스코프와 기본 멤버를 만듭니다.
-
-설치 API 2와 `engine: ^0.1.0` 호환 호스트가 필요합니다. `core.select-suite`와 `sys.minibuffer`는 선택 의존성입니다. 선택 확장이 없을 때도 생성·렌더·DSL 적용은 동작하지만, 선택 기반 구속 명령과 미니버퍼 입력은 제한됩니다. 이 확장은 사용자가 승인한 뒤 앱 안에서 실행되는 **신뢰 확장**입니다. `capabilities`는 접근 의도를 설명하며 DOM·네트워크를 격리하는 샌드박스가 아닙니다.
-
----
+개발 중에는 `pnpm dev`로 감시 빌드 서버(`http://127.0.0.1:5174`)를 띄우고 alid의 "개발 중인 확장 연결"에 주소를 넣습니다.
 
 ## 사용법
 
-1. **Kite 다이어그램**을 만듭니다. 기본 예제는 직각삼각형, 외접원, 중점, 원 위의 점 `P`를 포함합니다.
-2. 스코프를 선택하면 인스펙터에 **Kite Tri-DSL** 패널이 열립니다. Domain / Substance / Style 탭을 편집하고 `Ctrl/⌘+Enter` 또는 **적용**을 누릅니다.
-3. 캔버스에서 점을 끌면 구속 조건을 유지한 채 움직입니다. 점 `P`를 원 밖으로 끌어 보세요.
-4. 드래그 중 `Shift`를 누르면 위상 스냅 후보가 배지로 나타납니다.
-   - 다른 선분의 중점 근처 → `Midpoint(P, A, B)`
-   - 공유 꼭짓점에서 두 선분이 90° 근처 → `Perpendicular(s1, s2)`
-   - 다른 원의 원주 근처 → `OnCircle(P, c)`
-   놓으면 해당 구속 문장이 Substance DSL에 승격되고, 드래그 전체가 **Undo 한 번**으로 복원됩니다.
-5. 점·선분·원을 1~3개 선택하고 **Kite 구속**을 실행하면 가능한 구속 목록이 나옵니다. `sys.minibuffer`가 없으면 첫 번째 가능한 구속을 적용합니다.
-6. **Kite 진단** 패널에서 총 DOF, 구속 DOF(수치 랭크 추정), 잔여 DOF, 잔차, 반복 수, 과구속 후보를 확인하고 **다시 수렴** 또는 **기하 고정**을 실행합니다.
+- 도구 선반의 **Kite 도해** 또는 `M-x kite: insert-scope`로 예제(탈레스 정리)를 넣습니다. 스코프와 멤버가 한 번의 Undo로 생깁니다.
+- 멤버를 선택하면 점·반지름 핸들이 나타납니다. 끌면 매 프레임 구속을 만족하는 위치로 투영되고, 놓을 때 한 번만 커밋됩니다(Undo 한 번으로 원복). Esc, 창 이탈, pointercancel은 아무것도 쓰지 않습니다.
+- 드래그 중 **Shift**: 중점 · 원 위 · 일치 · 직교 스냅 후보를 배지로 보여 주고, Shift를 누른 채 놓으면 그 구속이 Substance에 추가됩니다(드래그 결과와 같은 Undo 단계).
+- 멤버 1~3개를 선택하면 화면 HUD(Space 2B)에 가능한 구속 버튼이 뜹니다(예: 선분 둘 → ⊥ 직교, // 평행, = 등길이).
+- 스코프를 선택하고 **Tri-DSL 편집기**(`kite: open-tri-editor`)에서 세 DSL을 고친 뒤 ⌘/Ctrl+Enter로 적용합니다. 새 기하는 약 180ms 동안 이전 상태에서 완화되며 보입니다(ScratchOverlay에서만; 문서는 한 번만 바뀜). Style `param`은 DialKit 슬라이더로 조절하며, 드래그 하나가 Undo 하나입니다.
+- **솔버 진단** 패널(`kite: open-diagnostics`)은 자유도, 구속된 자유도(야코비안 수치 계수), 남은 자유도, 반복 횟수, 잔차 에너지 E(x), 과구속 구속 목록과 Quick Fix(소프트로 완화 / 삭제)를 보여 줍니다.
+- 스코프 이동·크기 변경·회전은 프레임 변환만 바꾸므로 솔버를 다시 돌리지 않습니다.
 
 ### 주요 명령
 
 | 명령 | 설명 |
-| --- | --- |
-| `Kite 다이어그램 추가` | 스코프와 기본 멤버를 한 트랜잭션으로 만듭니다. |
-| `Kite DSL 적용` | 세 DSL을 한 번의 Undo로 적용하고 다시 수렴합니다. |
-| `Kite 기본 예제로 복원` | 기본 3분할 예제로 되돌립니다. |
-| `Kite 점 추가` | 자유 점을 추가합니다. |
-| `Kite 구속 추가` | 선택 조합에 가능한 구속을 제시합니다. |
-| `Kite: 원 위에 배치` / `중점` / `직교` / `등길이` / `수평` / `수직` / `접선` | 선택 멤버에 해당 구속을 추가합니다. |
-| `Kite: 거리 지정` | 두 점 사이 거리를 미니버퍼에서 고릅니다. |
-| `Kite: 기하 고정` | 모든 구속을 제거하고 현재 좌표를 핀으로 고정합니다. |
-| `Kite: 바인딩 복구` | `substanceId ↔ EntityId` 맵을 실제 멤버에서 다시 만듭니다. |
-| `Kite: 다시 수렴` | 현재 정본에서 솔버를 다시 돌려 시드를 갱신합니다. |
+|---|---|
+| `kite: insert-scope` | 예제 스코프 추가 |
+| `kite: add-point` / `add-segment` / `add-circle` / `add-label` | 선언 추가(부족한 인자는 미니버퍼에서 고름) |
+| `kite: constrain` | 선택에 가능한 구속 고르기 |
+| `kite: constrain-tangent` 등 7종 | 특정 구속, 중첩 `completingRead`로 인자를 차례로 선택 |
+| `kite: relax-constraint` / `remove-constraint` | 과구속 Quick Fix |
+| `kite: toggle-pin` | 점/원 자유도 고정 |
+| `kite: reproject` | 현재 DSL과 시드에서 다시 수렴 |
+| `kite: bake-to-vector` | 수렴 기하를 `vector.path` + `markdown.card`로 바꾸고 스코프 제거 |
+| `kite: extract-subgraph` | 선택 멤버와 그 사이에 닫힌 구속만으로 새 스코프 |
+| `kite: set-param` | Style `param` 값 변경 |
 
----
+명령 요약에 한글 초성 별칭(예: 접선 `ㅈㅅ`)과 영문 별칭이 있어 미니버퍼 퍼지 검색에 걸립니다. P / S / C 키는 선택한 스코프 안에서 점 · 선분 · 원 빠른 작도 모드(`root.select.kite.studio:create`)를 엽니다.
 
 ## DSL 맛보기
 
 ```text
 # Domain
 type Point shape point
-type Segment shape segment
-predicate OnCircle(Point, Circle)
+type Circle shape circle
+predicate On(Point, Circle) = OnCircle
+constructor MidpointOf(Point, Point) -> Point = Midpoint
 
 # Substance
-Point A = (80, 240) pin
-Point B = (260, 240) pin
-Segment AB = A .. B
-Circle c1 = center M r 127
-OnCircle(P, c1)
+Point A = (120, 260) pin
+Point B = (400, 260) pin
+Point O = MidpointOf(A, B)
+Circle c = center O through A
+Point P = PointOn(c)
+Label labThales = "∠APB = 90°" at bisector angP card
 
 # Style
-point { r: 4.5; fill: #2563eb; label: false }
-segment { stroke: #475569; width: 2 }
-P { fill: #dc2626; label: "P" }
+param k = 1 range(0.5, 3) step 0.1
+point { r: 4.5 * k; fill: #2563eb }
+@soft { compliance: 0.002 }
 ```
 
-전체 문법은 [docs/dsl.md](docs/dsl.md)를 참고하세요.
-
----
-
-## 아키텍처
-
-```text
-kite.scope (Canonical)
-  ├─ domainDsl / substanceDsl / styleDsl
-  ├─ entityBindings : substanceId → EntityId
-  ├─ convergedSeeds : EntityId → number[]
-  └─ solverConfig
-        │
-        └─ 순수 컴파일 (DSL 변경 시에만) ─→ 제약 위상 · DOF 표
-                │
-kite.member (Canonical)  ── derive ──→ 세계 좌표 기하 ──→ renderSvg / hitTest
-        ▲
-        └─ ScratchOverlay.convergedSeeds (드래그 중에만)
-```
-
-- `kite.member`는 `core.transform`을 저장하지 않습니다. 위치는 상위 스코프의 솔버 결과에서 파생되고, `layout: true`가 `computed.layoutBounds`를 공급합니다. 따라서 R-Tree 컬링·연결선 라우팅·선택 판정이 실시간 좌표를 그대로 봅니다.
-- 읽기 경로는 캐시된 시드를 투영만 합니다. 시드가 현재 DOF 레이아웃과 맞으면 반복 0회, `LoroDoc` 쓰기 0회입니다.
-- 드래그 경로만 매 프레임 솔버를 돌리고, `pointerup`에서 `convergedSeeds`와 (스냅 승격 시) `substanceDsl`을 **한 배치**로 씁니다.
-- 스코프 이동·회전·리사이즈는 `core.transform`만 바꾸므로 솔버를 다시 돌리지 않습니다.
-
-자세한 매핑과 PRD 대비 구현 범위는 [docs/architecture.md](docs/architecture.md)에 정리했습니다.
-
----
+전체 문법은 [docs/dsl.md](docs/dsl.md), 설계와 PRD 대응표는 [docs/architecture.md](docs/architecture.md)를 보세요.
 
 ## 개발
 
-Node.js **22.12 이상**, `pnpm@11.22.0`을 사용합니다.
-
 ```sh
-pnpm install --frozen-lockfile
-pnpm typecheck       # TypeScript 소스 검사
-pnpm test            # 배포 번들 빌드 + Vitest 계약/솔버/기하 테스트
-pnpm check:dist      # 재빌드 후 커밋된 산출물과 차이 확인
-pnpm dev             # http://127.0.0.1:5174 watch 서버
+pnpm install
+pnpm build        # Wasm(변경 시) → dist/plugin.js → alid.extension.json
+pnpm test         # 빌드 후 vitest (로컬 alid 체크아웃의 실제 커널 + Loro 코어)
+pnpm test:rust    # crate-kite-solver cargo test
+pnpm check        # typecheck + test + 커밋된 산출물 일치 확인
 ```
 
-EucliDraw의 **확장 관리 → 개발 중인 확장 연결**에 `pnpm dev` 주소를 입력하면 소스 저장 시 다시 빌드되어 캔버스에 반영됩니다. 개발 출력은 `.alid-dev/`에만 생성됩니다.
+- Rust 툴체인은 `PATH`, `$KITE_RUST_TOOLCHAIN`, `$ALID/.toolchain`, `~/Workspace/alid/.toolchain` 순서로 찾습니다. wasm32-unknown-unknown 타깃이 필요합니다.
+- `src/generated/kite-solver-wasm.ts`는 커밋됩니다. 크레이트 소스 해시가 같으면 Rust 없이도 빌드됩니다. 크레이트를 고쳤는데 툴체인이 없으면 빌드가 실패합니다.
+- 통합 테스트는 `$ALID` 또는 `~/Workspace/alid`가 있어야 돌고, 없으면 건너뜁니다(커널은 npm에 없습니다).
 
-### 파일 구조
+## 측정값과 한계 (정직한 보고)
 
-| 파일 | 역할 |
-| --- | --- |
-| `extension.json` | 확장 ID·버전·요약·의존성·명령 이름의 원본 |
-| `src/manifest.ts` | 번들과 설치 명세가 공유하는 패키지 계약 |
-| `src/types.ts` | 호스트 공개 계약과 Kite 문서 스키마의 구조적 타입 |
-| `src/dsl/` | Domain · Substance · Style 파서와 제약 위상 컴파일러 |
-| `src/solver/` | Float64Array XPBD/다양체 정사영, 캐시, 진단 랭크 |
-| `src/geometry.ts` | 스코프 로컬 ↔ 세계 좌표, 기하 투영, 히트 테스트 |
-| `src/render/member.ts` | 순수 SVG 렌더러, 각도·틱·직교·핀 표식 |
-| `src/aspects.ts` | `kite.scope`, `kite.member` 어스펙트와 선택 기하 |
-| `src/tools/kite-manipulate.ts` | 기즈모 드래그, ScratchOverlay, HUD 궤적/배지 |
-| `src/tools/drag-session.ts` | 한 번의 드래그에 대한 순수 솔버 세션 |
-| `src/tools/documents.ts` | 생성·DSL 적용·바인딩 동기화·단일 커밋 |
-| `src/panel/` | Tri-DSL 인스펙터, DOF/잔차 진단 패널 |
-| `src/commands.ts` | 명령 등록과 선택 기반 구속 추론 |
-| `test/` | DSL·솔버·기하·플러그인·번들 계약 테스트 |
+- Node + jsdom, 59개 개체 / 112개 구속에서 드래그 한 프레임의 **Wasm 솔브 중앙값 약 0.10ms**(p95 0.12ms), 오버레이 기록과 커널 재계산을 포함한 **전체 프레임 중앙값 약 7.2ms**(p95 9.3ms)를 측정했습니다. 실제 브라우저의 120fps나 GC 0회는 측정하지 않았으므로 주장하지 않습니다.
+- 실제 브라우저, 실제 IME(한글 조합) 입력, 터치 기기는 수동 검증하지 않았습니다. IME 가드는 합성 이벤트(`isComposing`, keyCode 229, compositionend 후 16ms)로만 테스트했습니다.
+- Space 2B 팝오버는 `@alid/react`의 `NodeAnchoredPopover`가 아니라 확장 자체의 HUD 요소입니다(React 의존성 없이 단일 번들을 유지하기 위해).
+- 패널 열기 명령은 호스트의 `workspace.layout`/`ui.workbench`가 `openPanel`을 제공할 때만 동작합니다.
+- 붙여넣은 스코프는 읽기만으로 올바르게 그려지지만(추가 쓰기 0회), 저장된 `entityBindings`/`convergedSeeds` 키는 다음 Kite 커밋 때 새 id로 갱신됩니다.
+- XPBD는 비볼록 구속에서 국소해에 머물 수 있습니다. 시드가 없는 자유도만 결정적 후보 탐색(`discrete_init`)으로 배치하고, 기존 기하는 흔들지 않습니다.
 
-`dist/plugin.js`, `alid.extension.json`은 생성 산출물이므로 직접 편집하지 말고 `pnpm build`로 갱신합니다.
+## 라이선스
 
----
-
-## 검증 범위와 정직한 한계
-
-`pnpm test`는 다음을 실제 소스로 검증합니다.
-
-- 기본 DSL 컴파일, 결정론, 오류 줄 번호, 스타일 병합·숫자 재작성
-- 기본 작도 수렴, 원 위 드래그 투영, 직교·등길이·중점 불변식
-- 시드 토폴로지 불일치 감지, 시드 왕복, DOF 랭크 진단
-- 멤버 투영·순수 SVG 결정론·XSS 이스케이프·선택 히트 테스트
-- 설치 계약, 명령·패널 등록, 단일 Undo 그룹 생성, 읽기 시 쓰기 0회
-- 드래그당 정확히 한 번의 정본 패치와 원래 시드로의 복원
-- Shift 위상 스냅 승격(중점·원 위)과 승격된 구속 문장 기록
-- 커밋된 `dist/plugin.js`의 SHA-256·크기·단일 ESM 계약
-- 로컬 alid 커널 체크아웃에서 실제 `ExtensionRuntimeRegistry` 설치, 스코프 생성, `computed.kite.member`/`computed.effectiveBounds`, 순수 SVG 내보내기, 읽기 시 쓰기 0회, 기즈모 드래그→ScratchOverlay 미리보기→단일 커밋, dispose 스모크 1회 수행
-
-아직 구현하지 않았거나 검증하지 않은 것:
-
-- **Wasm SIMD 솔버가 아닙니다.** 현재 솔버는 TypeScript `Float64Array` 구현입니다. PRD의 Rust/Wasm 커널은 이 저장소에 포함되지 않았습니다.
-- **120fps·핫패스 0-GC 벤치마크를 주장하지 않습니다.** 자동 성능 계측과 1,000개 엔티티 스트레스 테스트는 없습니다.
-- **Markdown/MathJax 라벨 통합이 없습니다.** 라벨은 순수 SVG `<text>`로 렌더링합니다. `markdown-card`의 수식 SVG를 합성하는 경로는 아직 없습니다.
-- **`vector-path` 진짜 베이킹이 아닙니다.** `기하 고정`은 구속을 제거하고 좌표를 핀으로 고정하지만, 별도 `vector.path` 엔티티로 변환하지는 않습니다.
-- **스코프 복사 리매핑이 자동이 아닙니다.** 스코프와 멤버를 함께 복사한 뒤에는 `Kite: 바인딩 복구`를 실행해야 새 `EntityId`에 매핑됩니다. 부분 서브그래프 복사·유도 부분그래프 추출은 미구현입니다.
-- **수식 라벨/IME/실제 브라우저 드래그는 수동 검증이 필요합니다.** Node 테스트는 모의 호스트 계약 검증이며 실제 EucliDraw 설치·Loro Undo·한글 IME 통합 검증이 아닙니다.
-- `connector-wire`는 멤버의 `computed.layoutBounds`를 자동으로 추종하지만, 실제 화살표 라우팅 통합은 호스트에서 수동 확인해야 합니다.
-
-이 목록은 PRD의 나머지 단계(Wasm 커널, MathJax 라벨, 완전한 클립보드 서브그래프, 성능 게이트)를 완료로 포장하지 않기 위한 것입니다.
-
-MIT License.
+[LICENSE](LICENSE)

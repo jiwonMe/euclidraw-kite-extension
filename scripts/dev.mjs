@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { rm } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'vite';
+import { buildWasm } from './build-wasm.mjs';
 import { createInstallManifest, readConfig, root } from './install-manifest.mjs';
 
 const DEFAULT_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];
@@ -58,7 +59,9 @@ export async function startDevServer({ port = 5174, host = '127.0.0.1', origins 
   let revision = 0;
   // Dev output is separate and gitignored, so the committed release dist/ never changes while you work.
   const outDir = new URL(`.alid-dev/${port || 'auto'}-${process.pid}/`, root);
-  const watcher = await build({ logLevel: 'warn', root: fileURLToPath(root), configFile: fileURLToPath(new URL('vite.config.js', root)), build: { outDir: fileURLToPath(outDir), emptyOutDir: true, watch: {} } });
+  // The solver is inlined into the bundle; rebuild it first when the crate changed.
+  buildWasm();
+  const watcher = await build({ logLevel: 'warn', root: fileURLToPath(root), configFile: fileURLToPath(new URL('vite.config.ts', root)), build: { outDir: fileURLToPath(outDir), emptyOutDir: true, watch: {} } });
   watcher.on('event', async event => {
     if (event.code === 'START') { building = true; broadcast('building', {}); }
     else if (event.code === 'ERROR') {

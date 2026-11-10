@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      dialkit:
+        specifier: 2.1.0
+        version: 2.1.0
     devDependencies:
       '@types/jsdom':
         specifier: ^30.0.0
@@ -15,7 +19,7 @@ importers:
         specifier: ^24.0.0
         version: 24.19.2
       jsdom:
-        specifier: ^27.0.0
+        specifier: ^27.4.0
         version: 27.4.0
       typescript:
         specifier: ~5.9.3
@@ -272,6 +276,32 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dialkit@2.1.0:
+    resolution: {integrity: sha512-W335tF+Yi6vQ4CkNu1xNc50AUs2jgPfAFsZbSB2GnCnPadoViMNzc1ccqlmKXtO2fGqFS/BJTQDpJ9DuGlhNJg==}
+    peerDependencies:
+      motion: '>=11.0.0'
+      motion-v: '>=2.0.0'
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
+      solid-js: '>=1.6.0'
+      svelte: '>=5.8.0'
+      vue: '>=3.3.0'
+    peerDependenciesMeta:
+      motion:
+        optional: true
+      motion-v:
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
   entities@9.0.0:
     resolution: {integrity: sha512-oJFNDJg3kTPwAD1cNn2+WmUq4wFoo09npc3Ydf1D7ED4smRiWrsKnaLxykrTWgyGEcusc87P5dxlAleol9kpkg==}
@@ -801,6 +831,8 @@ snapshots:
   decimal.js@10.6.0: {}
 
   detect-libc@2.1.2: {}
+
+  dialkit@2.1.0: {}
 
   entities@9.0.0: {}
 

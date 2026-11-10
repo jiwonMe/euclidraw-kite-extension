@@ -1,37 +1,51 @@
 {
   "id": "kite.studio",
   "title": "Kite Studio",
-  "version": "0.1.0",
-  "summary": "Domain · Substance · Style 3분할 DSL과 다양체 정사영 솔버로, 구속 조건이 살아있는 기하 도해를 캔버스에 만듭니다.",
+  "version": "0.2.0",
+  "summary": "Domain · Substance · Style 3분할 DSL과 Wasm SIMD 다양체 정사영 솔버로, 개별 점·선·원·라벨이 일급 캔버스 엔티티인 구속 기하 도해를 만듭니다.",
   "engine": "^0.1.0",
   "dependencies": {},
   "optionalDependencies": {
+    "core.select-suite": "^0.1.0",
+    "core.clipboard": "^0.1.0",
     "sys.minibuffer": "^0.1.0",
-    "core.select-suite": "^0.1.0"
+    "doc.markdown-math": "^0.1.0",
+    "vector.pen-suite": "^0.1.0"
   },
   "conflicts": [],
   "provides": {
     "services": [
       "kite.api"
     ],
-    "hsmSlots": []
+    "hsmSlots": [
+      "root.select.kite.studio:manipulate",
+      "root.select.kite.studio:create"
+    ]
   },
   "commands": [
-    "insert-diagram",
+    "insert-scope",
+    "add-point",
+    "add-segment",
+    "add-circle",
+    "add-label",
     "apply-dsl",
     "reset-example",
-    "add-point",
-    "add-constraint",
+    "constrain",
+    "constrain-tangent",
+    "constrain-perpendicular",
+    "constrain-parallel",
     "constrain-on-circle",
     "constrain-midpoint",
-    "constrain-perpendicular",
     "constrain-equal-length",
-    "constrain-horizontal",
-    "constrain-vertical",
-    "constrain-tangent",
-    "set-distance",
-    "freeze-geometry",
-    "repair-bindings",
-    "reproject"
+    "constrain-distance",
+    "relax-constraint",
+    "remove-constraint",
+    "toggle-pin",
+    "reproject",
+    "bake-to-vector",
+    "extract-subgraph",
+    "set-param",
+    "open-tri-editor",
+    "open-diagnostics"
   ]
 }
