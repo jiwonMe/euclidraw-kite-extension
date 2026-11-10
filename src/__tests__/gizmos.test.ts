@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Handles are shown for every free optimization input in the document, not only
- * for the selected member, and pinned inputs lose their handle.
+ * Gizmos are an affordance for the current selection: nothing selected means
+ * no handles; a selected scope shows every free input in it; a selected member
+ * shows only that owner. Pinned inputs and read-only scopes stay without one.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -18,28 +19,38 @@ const center = (h: Host, memberId: string) => {
   const box = h.world.getComputed(memberId, 'computed.penrose.member');
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
+const dots = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length;
 
-suite('focus-free gizmos', () => {
-  it('shows handles without a selection and for every free owner', async () => {
+suite('selection-scoped gizmos', () => {
+  it('shows nothing without a selection, everything for a scope, one for a member', async () => {
     host = await startHost();
     const scopeId = await host.run<string>('penrose.studio:insert-scope');
     await settle(host);
     host.select([]);
     host.paint();
-    const ids = host.gizmoHandles().map(handle => handle.id).sort();
-    expect(ids).toEqual([
+    expect(host.gizmoHandles()).toHaveLength(0);
+    expect(dots(host)).toBe(0);
+
+    host.select([scopeId]);
+    host.paint();
+    expect(host.gizmoHandles().map(handle => handle.id).sort()).toEqual([
       `penrose:${scopeId}:move:\`A\`.icon`,
       `penrose:${scopeId}:move:\`B\`.icon`,
       `penrose:${scopeId}:move:\`C\`.icon`,
       `penrose:${scopeId}:move:\`c\`.icon`,
     ]);
+    expect(dots(host)).toBe(4);
     for (const handle of host.gizmoHandles()) expect(host.hitTest(handle.x, handle.y)).toBe(true);
-    // Visible affordance: one dot per handle in the HUD, never in the document.
-    expect(host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length).toBe(ids.length);
-    expect(host.compiler.compileToPureSvg(host.world)).not.toContain('penrose-gizmos');
+
+    host.select([bindings(host, scopeId).A!]);
+    host.paint();
+    expect(host.gizmoHandles().map(handle => handle.id)).toEqual([`penrose:${scopeId}:move:\`A\`.icon`]);
+    expect(dots(host)).toBe(1);
+    const point = center(host, bindings(host, scopeId).A!);
+    expect(host.hitTest(point.x, point.y)).toBe(true);
   });
 
-  it('shows a handle for every free vertex in the staged multigraph example', async () => {
+  it('shows every free vertex of the staged multigraph when its scope is selected', async () => {
     host = await startHost();
     const scopeId = await host.run<string>('penrose.studio:insert-scope');
     await settle(host);
@@ -50,20 +61,25 @@ suite('focus-free gizmos', () => {
       styleDsl: fixture('graph.style'),
     });
     await settle(host);
-    host.select([]);
+    host.select([scopeId]);
     host.paint();
     const handles = host.gizmoHandles();
     // Seven vertices, each with a free dot centre and a free label centre.
     expect(handles.length).toBe(14);
-    expect(host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length).toBe(14);
+    expect(dots(host)).toBe(14);
     for (const handle of handles) expect(host.hitTest(handle.x, handle.y)).toBe(true);
+
+    host.select([bindings(host, scopeId).Chicago!]);
+    host.paint();
+    expect(host.gizmoHandles().length).toBe(2);
+    expect(dots(host)).toBe(2);
   });
 
-  it('keeps handles aligned when the scope moves', async () => {
+  it('keeps handles aligned when the selected scope moves', async () => {
     host = await startHost();
     const scopeId = await host.run<string>('penrose.studio:insert-scope');
     await settle(host);
-    host.select([]);
+    host.select([scopeId]);
     host.paint();
     const handleOf = () => host!.gizmoHandles().find(handle => handle.id.includes(':move:`A`.icon'))!;
     const before = handleOf();
@@ -81,9 +97,9 @@ suite('focus-free gizmos', () => {
     host = await startHost({ clientOffset: { x: 120, y: 80 } });
     const rect = { x: 120, y: 80, left: 120, top: 80, right: 920, bottom: 680, width: 800, height: 600, toJSON: () => ({}) } as DOMRect;
     host.hud.getBoundingClientRect = () => rect;
-    await host.run<string>('penrose.studio:insert-scope');
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
     await settle(host);
-    host.select([]);
+    host.select([scopeId]);
     host.paint();
     const handles = host.gizmoHandles();
     const circles = [...host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle')];
@@ -100,15 +116,21 @@ suite('focus-free gizmos', () => {
     await settle(host);
     const a = bindings(host, scopeId).A!;
     const b = bindings(host, scopeId).B!;
+    host.select([scopeId]);
+    host.paint();
     const pa = center(host, a), pb = center(host, b);
     expect(host.hitTest(pa.x, pa.y)).toBe(true);
+    expect(host.hitTest(pb.x, pb.y)).toBe(true);
 
     host.select([a]);
     await host.run('penrose.studio:toggle-pin');
     host.paint();
     expect(host.hitTest(pa.x, pa.y)).toBe(false);
+    expect(dots(host)).toBe(0);
+
+    host.select([b]);
+    host.paint();
     expect(host.hitTest(pb.x, pb.y)).toBe(true);
-    expect(host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length).toBe(3);
 
     host.select([a]);
     await host.run('penrose.studio:toggle-pin');
