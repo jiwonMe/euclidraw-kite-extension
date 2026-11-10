@@ -27,7 +27,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 interface Paintable {
   readonly scopeId: EntityId;
-  readonly frame: Frame;
+  readonly canvas: { readonly width: number; readonly height: number };
   readonly position: { x: number; y: number };
   readonly kind: 'move' | 'scale';
   readonly path: string;
@@ -123,7 +123,6 @@ export class PenroseManipulator {
       const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
       const box = readScopeBox(context.world.getCanonicalView(), scopeId);
       if (!scope || !compiled || !layout || !box) continue;
-      const frame = frameFor(layout.canvas, box);
       const pinned = new Set(scope.pins.map(pin => pin.index));
       const translatable = new Set(compiled.interactivity.translatable.map(input => input.path));
       const scalable = new Set(compiled.interactivity.scalable.map(input => input.path));
@@ -133,8 +132,8 @@ export class PenroseManipulator {
         if (!input.owner) continue;
         // Pinned inputs are not free: no handle until the pin is released.
         if (indexesOf(input).some(index => pinned.has(index))) continue;
-        if (translatable.has(input.path)) this.addHandle(scopeId, frame, input, 'move', layout.varyingValues, registry);
-        if (scalable.has(input.path)) this.addHandle(scopeId, frame, input, 'scale', layout.varyingValues, registry);
+        if (translatable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'move', layout.varyingValues, registry);
+        if (scalable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'scale', layout.varyingValues, registry);
       }
     }
     this.paintOverlay();
@@ -153,9 +152,17 @@ export class PenroseManipulator {
     return undefined;
   }
 
+  /** The scope frame is derived from the live canonical transform, never cached. */
+  private liveFrame(scopeId: EntityId): Frame | undefined {
+    const { context } = this.host;
+    const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
+    const box = readScopeBox(context.world.getCanonicalView(), scopeId);
+    return layout && box ? frameFor(layout.canvas, box) : undefined;
+  }
+
   private addHandle(
     scopeId: EntityId,
-    frame: Frame,
+    canvas: { readonly width: number; readonly height: number },
     input: WireInputs,
     kind: 'move' | 'scale',
     values: readonly number[],
@@ -171,20 +178,23 @@ export class PenroseManipulator {
       shape: 'circle',
       radiusScreenPx: kind === 'move' ? 5 : 6,
       getWorldPosition: out => {
+        const frame = this.liveFrame(scopeId);
+        if (!frame) return false;
         const world = this.worldOfCanvas(frame, position);
         out.x = world.x; out.y = world.y;
         return true;
       },
       onPointerDown: event => {
         const surface = this.surface ?? surfaceOf(this.host.context);
-        if (!surface) return false;
+        const frame = this.liveFrame(scopeId);
+        if (!surface || !frame) return false;
         event.preventDefault();
         this.begin(scopeId, frame, input, kind, event, surface);
         return true;
       },
     });
     this.disposeHandles.push(off);
-    this.paintables.push({ scopeId, frame, position, kind, path: input.path });
+    this.paintables.push({ scopeId, canvas, position, kind, path: input.path });
   }
 
   /** World gizmos are painted in screen pixels into the host HUD, never the document. */
@@ -207,17 +217,33 @@ export class PenroseManipulator {
     }
     const active = this.session;
     const screen = { x: 0, y: 0 };
+    // `worldToScreen` returns client coordinates; the overlay lives inside the
+    // HUD, so subtract its client origin or every handle drifts outside the scope.
+    const hudRect = hud.getBoundingClientRect();
+    const frames = new Map<EntityId, Frame | undefined>();
+    const frameOf = (scopeId: EntityId) => {
+      if (!frames.has(scopeId)) frames.set(scopeId, this.liveFrame(scopeId));
+      return frames.get(scopeId);
+    };
     const parts: string[] = [];
     for (const paintable of this.paintables) {
-      const world = this.worldOfCanvas(paintable.frame, paintable.position);
+      // Keep the affordance inside the scope. Penrose canvas coordinates are
+      // centred on the origin, so the valid box is ±half of the canvas size.
+      const halfW = paintable.canvas.width / 2, halfH = paintable.canvas.height / 2;
+      if (Math.abs(paintable.position.x) > halfW || Math.abs(paintable.position.y) > halfH) continue;
+      const frame = frameOf(paintable.scopeId);
+      if (!frame) continue;
+      const world = this.worldOfCanvas(frame, paintable.position);
       surface.host.worldToScreen(world.x, world.y, screen);
+      const x = screen.x - hudRect.left;
+      const y = screen.y - hudRect.top;
       const isActive = !!active && active.target.scopeId === paintable.scopeId
         && active.target.kind === paintable.kind && active.target.input.path === paintable.path;
       const radius = paintable.kind === 'move' ? 4.5 : 5.5;
       const fill = isActive ? '#2563eb' : '#ffffff';
       const stroke = paintable.kind === 'scale' ? '#3b82f6' : '#64748b';
       parts.push(
-        `<circle cx="${round(screen.x)}" cy="${round(screen.y)}" r="${radius}" fill="${fill}" ` +
+        `<circle cx="${round(x)}" cy="${round(y)}" r="${radius}" fill="${fill}" ` +
         `stroke="${stroke}" stroke-width="1.5" data-kind="${paintable.kind}"/>`,
       );
     }

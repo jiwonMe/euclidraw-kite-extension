@@ -59,6 +59,41 @@ suite('focus-free gizmos', () => {
     for (const handle of handles) expect(host.hitTest(handle.x, handle.y)).toBe(true);
   });
 
+  it('keeps handles aligned when the scope moves', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    host.select([]);
+    host.paint();
+    const handleOf = () => host!.gizmoHandles().find(handle => handle.id.includes(':move:`A`.icon'))!;
+    const before = handleOf();
+    host.world.applyCanonicalTransaction('test:move', [
+      { id: scopeId, aspect: 'core.transform', patch: { x: 800, y: 400, rotation: 0 } },
+    ]);
+    host.paint();
+    const after = handleOf();
+    expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(300);
+    expect(host.hitTest(after.x, after.y)).toBe(true);
+    expect(host.hitTest(before.x, before.y)).toBe(false);
+  });
+
+  it('paints handles in HUD-local coordinates, not client coordinates', async () => {
+    host = await startHost({ clientOffset: { x: 120, y: 80 } });
+    const rect = { x: 120, y: 80, left: 120, top: 80, right: 920, bottom: 680, width: 800, height: 600, toJSON: () => ({}) } as DOMRect;
+    host.hud.getBoundingClientRect = () => rect;
+    await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    host.select([]);
+    host.paint();
+    const handles = host.gizmoHandles();
+    const circles = [...host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle')];
+    expect(circles.length).toBe(handles.length);
+    for (const circle of circles) {
+      const x = Number(circle.getAttribute('cx'));
+      expect(handles.some(handle => Math.abs(handle.x - x) < 0.6)).toBe(true);
+    }
+  });
+
   it('hides the handle of a pinned object and restores it when unpinned', async () => {
     host = await startHost();
     const scopeId = await host.run<string>('penrose.studio:insert-scope');

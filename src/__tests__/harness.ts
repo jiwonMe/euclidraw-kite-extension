@@ -54,7 +54,7 @@ export interface Host {
   dispose(): void;
 }
 
-export async function startHost(options: { clipboard?: boolean; minibuffer?: boolean; vectorPath?: boolean; markdown?: boolean } = {}): Promise<Host> {
+export async function startHost(options: { clipboard?: boolean; minibuffer?: boolean; vectorPath?: boolean; markdown?: boolean; clientOffset?: { x: number; y: number } } = {}): Promise<Host> {
   const { kernel, repo, bounds, clipboard, core, plugin, manifest } = await load();
   const wasm = new core.WasmCanvasCore();
   let commits = 0, groups = 0;
@@ -86,16 +86,18 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
   Object.assign(surface, { setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false });
   const gizmos = new kernel.GizmoRegistry(), painters = new Set<() => void>();
   let selection: string[] = [];
-  const identity = (x: number, y: number, out: { x: number; y: number }) => { out.x = x; out.y = y; };
+  const offset = options.clientOffset ?? { x: 0, y: 0 };
+  const toScreen = (x: number, y: number, out: { x: number; y: number }) => { out.x = x + offset.x; out.y = y + offset.y; };
+  const fromScreen = (x: number, y: number, out: { x: number; y: number }) => { out.x = x - offset.x; out.y = y - offset.y; };
   const tool = {
     surface: { element: surface, hud },
     selection: { stateMachine, gizmos, getSelection: () => selection, select(id: string | null) { selection = id ? [id] : []; } },
-    host: { world, screenToWorld: identity, worldToScreen: identity, getZoom: () => 1, requestRender() {}, history, isSelectionEnabled: () => true },
+    host: { world, screenToWorld: fromScreen, worldToScreen: toScreen, getZoom: () => 1, requestRender() {}, history, isSelectionEnabled: () => true },
   };
   services.provide('canvas.active-tool-surface', { get: () => tool, subscribe: () => () => {} });
   services.provide('canvas.frames', { subscribe(paint: () => void) { painters.add(paint); return () => painters.delete(paint); } });
   services.provide('canvas.surface', { element: surface, hud });
-  services.provide('canvas.interaction', { world, screenToWorld: identity, worldToScreen: identity, getZoom: () => 1, requestRender() {}, history });
+  services.provide('canvas.interaction', { world, screenToWorld: fromScreen, worldToScreen: toScreen, getZoom: () => 1, requestRender() {}, history });
   services.provide('canvas.tool-input', new kernel.CanvasToolInputRegistry());
   const run = (caller: string, ops: Any[]) => { history.begin(); try { world.applyCanonicalTransaction(caller, ops, 'local:user'); history.commit(); } catch (error) { history.abort(); throw error; } };
   services.provide('canvas.clipboard-host', {
@@ -140,7 +142,7 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
     },
     hitTest(x, y) {
       const hit = { id: '', priority: 0, distanceScreenPx: 0 };
-      return gizmos.hitTest(x, y, identity, hit);
+      return gizmos.hitTest(x, y, toScreen, hit);
     },
     gizmoHandles() {
       return ((gizmos as Any).handles ?? []).map((handle: Any) => {
@@ -153,7 +155,7 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
       const hit = { id: '', priority: 0, distanceScreenPx: 0 };
       const event = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, ...init }) as PointerEvent;
       Object.defineProperty(event, 'pointerId', { value: 1 });
-      if (gizmos.hitTest(x, y, identity, hit)) return Boolean(gizmos.getHandle(hit.id)?.onPointerDown?.(event));
+      if (gizmos.hitTest(x, y, toScreen, hit)) return Boolean(gizmos.getHandle(hit.id)?.onPointerDown?.(event));
       surface.dispatchEvent(event);
       return false;
     },

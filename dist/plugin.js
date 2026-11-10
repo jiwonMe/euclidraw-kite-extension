@@ -1552,9 +1552,9 @@ var st = (e) => Math.round(e * 100) / 100, ct = class {
 			if (e.world.isEntityReadOnly(t)) continue;
 			let r = G(e.world, t), i = e.world.getComputed(t, p.compiled), a = e.world.getComputed(t, p.layout), o = x(e.world.getCanonicalView(), t);
 			if (!r || !i || !a || !o) continue;
-			let s = S(a.canvas, o), c = new Set(r.pins.map((e) => e.index)), l = new Set(i.interactivity.translatable.map((e) => e.path)), u = new Set(i.interactivity.scalable.map((e) => e.path)), d = /* @__PURE__ */ new Map();
-			for (let e of [...i.interactivity.translatable, ...i.interactivity.scalable]) d.set(e.path, e);
-			for (let e of d.values()) e.owner && (ot(e).some((e) => c.has(e)) || (l.has(e.path) && this.addHandle(t, s, e, "move", a.varyingValues, n), u.has(e.path) && this.addHandle(t, s, e, "scale", a.varyingValues, n)));
+			let s = new Set(r.pins.map((e) => e.index)), c = new Set(i.interactivity.translatable.map((e) => e.path)), l = new Set(i.interactivity.scalable.map((e) => e.path)), u = /* @__PURE__ */ new Map();
+			for (let e of [...i.interactivity.translatable, ...i.interactivity.scalable]) u.set(e.path, e);
+			for (let e of u.values()) e.owner && (ot(e).some((e) => s.has(e)) || (c.has(e.path) && this.addHandle(t, a.canvas, e, "move", a.varyingValues, n), l.has(e.path) && this.addHandle(t, a.canvas, e, "scale", a.varyingValues, n)));
 		}
 		this.paintOverlay();
 	}
@@ -1582,6 +1582,10 @@ var st = (e) => Math.round(e * 100) / 100, ct = class {
 			};
 		}
 	}
+	liveFrame(e) {
+		let { context: t } = this.host, n = t.world.getComputed(e, p.layout), r = x(t.world.getCanonicalView(), e);
+		return n && r ? S(n.canvas, r) : void 0;
+	}
 	addHandle(e, t, n, r, i, a) {
 		let o = this.canvasPoint(n, i);
 		if (!o) return;
@@ -1596,18 +1600,20 @@ var st = (e) => Math.round(e * 100) / 100, ct = class {
 			priority: it,
 			shape: "circle",
 			radiusScreenPx: r === "move" ? 5 : 6,
-			getWorldPosition: (e) => {
-				let n = this.worldOfCanvas(t, c);
-				return e.x = n.x, e.y = n.y, !0;
+			getWorldPosition: (t) => {
+				let n = this.liveFrame(e);
+				if (!n) return !1;
+				let r = this.worldOfCanvas(n, c);
+				return t.x = r.x, t.y = r.y, !0;
 			},
-			onPointerDown: (i) => {
-				let a = this.surface ?? H(this.host.context);
-				return a ? (i.preventDefault(), this.begin(e, t, n, r, i, a), !0) : !1;
+			onPointerDown: (t) => {
+				let i = this.surface ?? H(this.host.context), a = this.liveFrame(e);
+				return !i || !a ? !1 : (t.preventDefault(), this.begin(e, a, n, r, t, i), !0);
 			}
 		});
 		this.disposeHandles.push(l), this.paintables.push({
 			scopeId: e,
-			frame: t,
+			canvas: t,
 			position: c,
 			kind: r,
 			path: n.path
@@ -1624,14 +1630,18 @@ var st = (e) => Math.round(e * 100) / 100, ct = class {
 		let n = this.session, r = {
 			x: 0,
 			y: 0
-		}, i = [];
+		}, i = t.getBoundingClientRect(), a = /* @__PURE__ */ new Map(), o = (e) => (a.has(e) || a.set(e, this.liveFrame(e)), a.get(e)), s = [];
 		for (let t of this.paintables) {
-			let a = this.worldOfCanvas(t.frame, t.position);
-			e.host.worldToScreen(a.x, a.y, r);
-			let o = !!n && n.target.scopeId === t.scopeId && n.target.kind === t.kind && n.target.input.path === t.path, s = t.kind === "move" ? 4.5 : 5.5, c = o ? "#2563eb" : "#ffffff", l = t.kind === "scale" ? "#3b82f6" : "#64748b";
-			i.push(`<circle cx="${st(r.x)}" cy="${st(r.y)}" r="${s}" fill="${c}" stroke="${l}" stroke-width="1.5" data-kind="${t.kind}"/>`);
+			let a = t.canvas.width / 2, c = t.canvas.height / 2;
+			if (Math.abs(t.position.x) > a || Math.abs(t.position.y) > c) continue;
+			let l = o(t.scopeId);
+			if (!l) continue;
+			let u = this.worldOfCanvas(l, t.position);
+			e.host.worldToScreen(u.x, u.y, r);
+			let d = r.x - i.left, f = r.y - i.top, p = !!n && n.target.scopeId === t.scopeId && n.target.kind === t.kind && n.target.input.path === t.path, m = t.kind === "move" ? 4.5 : 5.5, h = p ? "#2563eb" : "#ffffff", g = t.kind === "scale" ? "#3b82f6" : "#64748b";
+			s.push(`<circle cx="${st(d)}" cy="${st(f)}" r="${m}" fill="${h}" stroke="${g}" stroke-width="1.5" data-kind="${t.kind}"/>`);
 		}
-		this.overlay.innerHTML = i.join("");
+		this.overlay.innerHTML = s.join("");
 	}
 	scaleOffset(e, t) {
 		let n = (e) => e === void 0 ? 0 : t[e] ?? 0, r = e.r === void 0 ? e.rx === void 0 ? e.width === void 0 ? 0 : n(e.width) / 2 : n(e.rx) : n(e.r);
