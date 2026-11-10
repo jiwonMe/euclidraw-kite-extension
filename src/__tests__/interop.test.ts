@@ -77,6 +77,15 @@ suite('workbench panels', () => {
       expect(panel.navigation?.group).toBe('document');
       expect(panel.mount).toBeTypeOf('function');
     }
+    const scopeAspect = host.plugin.aspects.find((aspect: { id: string }) => aspect.id === 'penrose.scope');
+    const controls = scopeAspect.ui.controls as { id: string; commandSymbol: string; icon?: unknown }[];
+    expect(controls.some(control => control.id === 'penrose.scope.open-editor')).toBe(false);
+    const reproject = controls.find(control => control.id === 'penrose.scope.reproject')!;
+    const resample = controls.find(control => control.id === 'penrose.scope.resample')!;
+    expect(reproject.commandSymbol).toBe('penrose.studio:reproject');
+    expect(resample.commandSymbol).toBe('penrose.studio:resample');
+    expect(reproject.icon).toBeTruthy();
+    expect(resample.icon).toBeTruthy();
   });
 });
 

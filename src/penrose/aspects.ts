@@ -56,6 +56,14 @@ function escapeText(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
 
+const RESAMPLE_ICON = {
+  paths: ['M3 8a5 5 0 1 1 1.5 3.5', 'M3 4v4h4'],
+} as const;
+
+const REPROJECT_ICON = {
+  paths: ['M8 2.5a5.5 5.5 0 1 1-5.2 7.3', 'M8 5.5v5M5.5 8h5'],
+} as const;
+
 export function scopeSpec(panels: NonNullable<AspectSpec<PenroseScopeAspect, ScopeDerived>['ui']>['panels']): AspectSpec<PenroseScopeAspect, ScopeDerived> {
   return {
     id: SCOPE_ASPECT,
@@ -122,7 +130,8 @@ export function scopeSpec(panels: NonNullable<AspectSpec<PenroseScopeAspect, Sco
     ui: {
       panels,
       controls: [
-        { id: 'penrose.scope.open-editor', kind: 'action', label: 'Tri-DSL 편집기', placement: 'selection-bar', commandSymbol: COMMANDS.openEditor, requiresSelection: true },
+        { id: 'penrose.scope.reproject', kind: 'action', label: '다시 수렴', placement: 'selection-bar', commandSymbol: COMMANDS.reproject, icon: REPROJECT_ICON, requiresSelection: true },
+        { id: 'penrose.scope.resample', kind: 'action', label: '재표본', placement: 'selection-bar', commandSymbol: COMMANDS.resample, icon: RESAMPLE_ICON, requiresSelection: true },
         { id: 'penrose.scope.bake', kind: 'action', label: '벡터로 베이킹', placement: 'selection-bar', commandSymbol: COMMANDS.bake, requiresSelection: true },
       ] satisfies UiControl[],
     },
