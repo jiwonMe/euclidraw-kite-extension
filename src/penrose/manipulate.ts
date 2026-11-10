@@ -23,6 +23,15 @@ interface DragSession {
 }
 
 const HANDLE_PRIORITY = 45;
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+interface Paintable {
+  readonly scopeId: EntityId;
+  readonly frame: Frame;
+  readonly position: { x: number; y: number };
+  readonly kind: 'move' | 'scale';
+  readonly path: string;
+}
 
 /** Every optimization input index of one style path, matching runtime order. */
 function indexesOf(input: WireInputs): number[] {
@@ -34,6 +43,8 @@ function indexesOf(input: WireInputs): number[] {
   for (const index of [input.r, input.rx, input.ry, input.width, input.height]) if (index !== undefined) out.push(index);
   return out;
 }
+
+const round = (value: number): number => Math.round(value * 100) / 100;
 
 /**
  * Free-degree gizmos. Handles exist only for properties Penrose reports as
@@ -47,12 +58,14 @@ export class PenroseManipulator {
   private session: DragSession | undefined;
   private surface: CanvasToolSurface | undefined;
   private lastKey = '';
+  private paintables: Paintable[] = [];
+  private overlay: SVGSVGElement | undefined;
 
   constructor(host: PenroseHost) {
     this.host = host;
     const { context } = host;
     const frames = context.services.get<{ subscribe(paint: () => void): () => void }>('canvas.frames');
-    if (frames) this.listeners.push(frames.subscribe(() => this.refresh()));
+    if (frames) this.listeners.push(frames.subscribe(() => { this.refresh(); this.paintOverlay(); }));
     this.listeners.push(context.world.subscribe(() => this.rebuild()));
     const provider = context.services.get<CanvasToolSurfaceProvider>('canvas.active-tool-surface');
     if (provider) this.listeners.push(provider.subscribe(() => { this.surface = provider.get(); this.rebuild(); }));
@@ -64,6 +77,9 @@ export class PenroseManipulator {
     this.cancel();
     for (const off of this.listeners.splice(0)) off();
     this.clearHandles();
+    this.overlay?.remove();
+    this.overlay = undefined;
+    this.paintables = [];
   }
 
   private clearHandles(): void {
@@ -95,6 +111,7 @@ export class PenroseManipulator {
   private rebuild(): void {
     if (this.session) return;
     this.clearHandles();
+    this.paintables = [];
     const { context } = this.host;
     const surface = this.surface ?? surfaceOf(context);
     if (!surface) return;
@@ -120,6 +137,7 @@ export class PenroseManipulator {
         if (scalable.has(input.path)) this.addHandle(scopeId, frame, input, 'scale', layout.varyingValues, registry);
       }
     }
+    this.paintOverlay();
   }
 
   private canvasPoint(input: WireInputs, values: readonly number[]): { x: number; y: number } | undefined {
@@ -166,6 +184,44 @@ export class PenroseManipulator {
       },
     });
     this.disposeHandles.push(off);
+    this.paintables.push({ scopeId, frame, position, kind, path: input.path });
+  }
+
+  /** World gizmos are painted in screen pixels into the host HUD, never the document. */
+  private paintOverlay(): void {
+    const surface = this.surface ?? surfaceOf(this.host.context);
+    if (!surface) return;
+    const hud = surface.surface.hud;
+    if (this.overlay && this.overlay.parentElement !== hud) {
+      this.overlay.remove();
+      this.overlay = undefined;
+    }
+    if (!this.overlay) {
+      const doc = hud.ownerDocument;
+      const svg = doc.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
+      svg.dataset.role = 'penrose-gizmos';
+      svg.setAttribute('aria-hidden', 'true');
+      svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none';
+      hud.append(svg);
+      this.overlay = svg;
+    }
+    const active = this.session;
+    const screen = { x: 0, y: 0 };
+    const parts: string[] = [];
+    for (const paintable of this.paintables) {
+      const world = this.worldOfCanvas(paintable.frame, paintable.position);
+      surface.host.worldToScreen(world.x, world.y, screen);
+      const isActive = !!active && active.target.scopeId === paintable.scopeId
+        && active.target.kind === paintable.kind && active.target.input.path === paintable.path;
+      const radius = paintable.kind === 'move' ? 4.5 : 5.5;
+      const fill = isActive ? '#2563eb' : '#ffffff';
+      const stroke = paintable.kind === 'scale' ? '#3b82f6' : '#64748b';
+      parts.push(
+        `<circle cx="${round(screen.x)}" cy="${round(screen.y)}" r="${radius}" fill="${fill}" ` +
+        `stroke="${stroke}" stroke-width="1.5" data-kind="${paintable.kind}"/>`,
+      );
+    }
+    this.overlay.innerHTML = parts.join('');
   }
 
   private scaleOffset(input: WireInputs, values: readonly number[]): { x: number; y: number } {

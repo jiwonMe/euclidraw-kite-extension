@@ -291,6 +291,12 @@ function interactivityOf(state: PenroseState): WireInteractivity {
   const scalable: WireInputs[] = [];
   const info = state.interactivityInfo;
   const byPath = info.inputIdxsByPath;
+  // Pending inputs are label measurements: insertPending resolved them to
+  // constants, so an index may still exist without being a free degree.
+  const isFree = (index: number): boolean => {
+    const input = state.inputs[index] as { meta?: { init?: { tag?: string } } } | undefined;
+    return !!input && input.meta?.init?.tag !== 'Pending';
+  };
   const read = (container: unknown): { tag?: string; contents?: unknown } | undefined => {
     const entry = container as { tag?: string; contents?: unknown } | undefined;
     if (!entry) return undefined;
@@ -300,23 +306,31 @@ function interactivityOf(state: PenroseState): WireInteractivity {
   const pair = (path: string, property: string): [number, number] | undefined => {
     const value = read(byPath.get(`${path}.${property}`));
     if (value?.tag === 'VectorV' && Array.isArray(value.contents) && value.contents.length >= 2) {
-      return [Number(value.contents[0]), Number(value.contents[1])];
+      const x = Number(value.contents[0]), y = Number(value.contents[1]);
+      return isFree(x) && isFree(y) ? [x, y] : undefined;
     }
     return undefined;
   };
   const single = (path: string, property: string): number | undefined => {
     const value = read(byPath.get(`${path}.${property}`));
-    return value?.tag === 'FloatV' && typeof value.contents === 'number' ? value.contents : undefined;
+    return value?.tag === 'FloatV' && typeof value.contents === 'number' && isFree(value.contents) ? value.contents : undefined;
   };
   const points = (path: string): [number, number][] | undefined => {
     const value = read(byPath.get(`${path}.points`));
-    if (value?.tag === 'PtListV' && Array.isArray(value.contents)) return value.contents as [number, number][];
-    return undefined;
+    if (value?.tag !== 'PtListV' || !Array.isArray(value.contents)) return undefined;
+    const list = (value.contents as unknown[]).map(point =>
+      Array.isArray(point) && point.length >= 2
+        ? ([Number(point[0]), Number(point[1])] as [number, number])
+        : undefined,
+    );
+    if (list.some(point => !point || !isFree(point[0]) || !isFree(point[1]))) return undefined;
+    return list as [number, number][];
   };
-  const shapePaths = new Set<string>([...info.translatableShapePaths, ...info.scalableShapePaths]);
-  for (const path of shapePaths) {
-    const shape = info.shapesByPath.get(path);
-    if (!shape) continue;
+
+  // Broad on purpose: ask which properties are optimization inputs, not only
+  // the shapes core labels "translatable". A partially free shape still gets a
+  // handle for the axes it can actually move.
+  for (const [path, shape] of info.shapesByPath) {
     const center = pair(path, 'center');
     const start = pair(path, 'start');
     const end = pair(path, 'end');
@@ -326,9 +340,13 @@ function interactivityOf(state: PenroseState): WireInteractivity {
     const ry = single(path, 'ry');
     const width = single(path, 'width');
     const height = single(path, 'height');
+    const movable = !!(center || start || end || pointList);
+    const resizable = r !== undefined || rx !== undefined || ry !== undefined || width !== undefined || height !== undefined;
+    if (!movable && !resizable) continue;
+    const owner = ownerOf((shape as unknown as AnyShape).path);
     const recorded: WireInputs = {
       path,
-      ...(ownerOf((shape as unknown as AnyShape).path) ? { owner: ownerOf((shape as unknown as AnyShape).path) } : {}),
+      ...(owner ? { owner } : {}),
       ...(center ? { center } : {}),
       ...(start ? { start } : {}),
       ...(end ? { end } : {}),
@@ -339,8 +357,8 @@ function interactivityOf(state: PenroseState): WireInteractivity {
       ...(width !== undefined ? { width } : {}),
       ...(height !== undefined ? { height } : {}),
     };
-    if (info.translatableShapePaths.has(path)) translatable.push(recorded);
-    if (info.scalableShapePaths.has(path)) scalable.push(recorded);
+    if (movable) translatable.push(recorded);
+    if (resizable) scalable.push(recorded);
   }
   return { translatable, scalable };
 }
