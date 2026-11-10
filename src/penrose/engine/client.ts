@@ -84,14 +84,14 @@ class WorkerEngine implements EngineClient {
     return response.layout;
   }
 
-  async drag(key: string, targets: readonly { index: number; value: number }[], steps: number): Promise<WireLayout> {
-    const response = await this.unwrap(await this.request({ type: 'drag', key, targets, steps }), 'drag');
+  async drag(key: string, targets: readonly { index: number; value: number }[], steps: number, budgetMs?: number): Promise<WireLayout> {
+    const response = await this.unwrap(await this.request({ type: 'drag', key, targets, steps, budgetMs }), 'drag');
     if (!response.layout) throw new Error('Penrose drag returned no result');
     return response.layout;
   }
 
-  async pointDrag(key: string, handleId: string, target: { x: number; y: number }, steps: number): Promise<WireLayout> {
-    const response = await this.unwrap(await this.request({ type: 'point-drag', key, handleId, target, steps }), 'point drag');
+  async pointDrag(key: string, handleId: string, target: { x: number; y: number }, steps: number, budgetMs?: number): Promise<WireLayout> {
+    const response = await this.unwrap(await this.request({ type: 'point-drag', key, handleId, target, steps, budgetMs }), 'point drag');
     if (!response.layout) throw new Error('Penrose point drag returned no result');
     return response.layout;
   }

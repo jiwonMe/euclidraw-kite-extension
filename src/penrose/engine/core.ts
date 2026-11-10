@@ -3,7 +3,7 @@
  * Node test engine; the extension's main chunk must keep `@penrose/core` out
  * (a second copy would blow the 5 MiB install budget).
  */
-import { compileTrio, evalEnergy, insertPending, optimize, resample, stepTimes } from '@penrose/core';
+import { compileTrio, evalEnergy, insertPending, optimize, resample, step, stepTimes } from '@penrose/core';
 import type { PenroseState } from '@penrose/core';
 import { mathjax } from 'mathjax-full/js/mathjax.js';
 import { TeX } from 'mathjax-full/js/input/tex.js';
@@ -678,6 +678,7 @@ export function dragPointSession(
   handleId: string,
   target: { x: number; y: number },
   steps: number,
+  budgetMs = 0,
 ): WireLayout {
   const handle = session.computed.find(entry => entry.id === handleId);
   if (!handle) return layoutOf(session);
@@ -695,27 +696,40 @@ export function dragPointSession(
       const index = handle.indexes[k]!;
       values[index] = (values[index] ?? 0) + delta[k]!;
     }
-    state = { ...state, varyingValues: values };
-    const stepped = stepTimes(state, Math.max(0, steps));
-    if (stepped.isOk()) state = stepped.value;
+    // Split the frame budget across the two IK rounds.
+    state = settleForDrag({ ...state, varyingValues: values }, Math.max(0, steps), budgetMs > 0 ? budgetMs / 2 : 0);
   }
   session.state = state;
   return layoutOf(session);
 }
 
-/** Drag: move the given input indexes to absolute targets, step, then re-pin. */
+/** One drag frame: fixed steps, or re-converge until the wall-clock budget. */
+function settleForDrag(state: PenroseState, steps: number, budgetMs = 0): PenroseState {
+  if (budgetMs > 0) {
+    const started = performance.now();
+    try {
+      const stepped = step(state, { until: () => performance.now() - started >= budgetMs });
+      return stepped.isOk() ? stepped.value : state;
+    } catch {
+      return state;
+    }
+  }
+  const stepped = stepTimes(state, steps);
+  return stepped.isOk() ? stepped.value : state;
+}
+
+/** Drag: move the given input indexes to absolute targets, converge, then re-pin. */
 export function dragSession(
   session: CoreSession,
   targets: readonly { index: number; value: number }[],
   steps: number,
+  budgetMs = 0,
 ): WireLayout {
   const values = [...session.state.varyingValues];
   for (const target of targets) {
     if (target.index >= 0 && target.index < values.length) values[target.index] = target.value;
   }
-  session.state.varyingValues = values;
-  const stepped = stepTimes(session.state, steps);
-  if (stepped.isOk()) session.state = stepped.value;
+  session.state = settleForDrag({ ...session.state, varyingValues: values }, steps, budgetMs);
   const pinned = [...session.state.varyingValues];
   for (const target of targets) {
     if (target.index >= 0 && target.index < pinned.length) pinned[target.index] = target.value;

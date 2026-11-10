@@ -407,8 +407,8 @@ export class PenroseManipulator {
       const finish = async () => {
         if (session.inflight) await session.inflight;
         const result = session.target.kind === 'computed' && session.target.computedId
-          ? await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0)
-          : await this.host.runtime.drag(scopeId, session.last, 0);
+          ? await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0, 0)
+          : await this.host.runtime.drag(scopeId, session.last, 0, 0);
         if (this.session !== session) return;
         commitDrag(this.host, scopeId, result.varyingValues);
         this.session = undefined;
@@ -486,12 +486,14 @@ export class PenroseManipulator {
     const sent = session.target.kind === 'computed' ? session.preview : session.last;
     session.inflight = (async () => {
       const scope = readScope(this.host.context.world, session.target.scopeId);
-      const steps = scope ? readSolverConfig(scope.solverConfig).dragSteps : 2;
+      const config = scope ? readSolverConfig(scope.solverConfig) : { dragSteps: 2, dragBudgetMs: 0 };
+      const steps = config.dragSteps;
+      const budgetMs = config.dragBudgetMs;
       try {
         if (session.target.kind === 'computed' && session.target.computedId) {
-          await this.host.runtime.pointDrag(session.target.scopeId, session.target.computedId, session.preview ?? session.startCanvas, steps);
+          await this.host.runtime.pointDrag(session.target.scopeId, session.target.computedId, session.preview ?? session.startCanvas, steps, budgetMs);
         } else {
-          await this.host.runtime.drag(session.target.scopeId, session.last, steps);
+          await this.host.runtime.drag(session.target.scopeId, session.last, steps, budgetMs);
         }
       } catch (error) {
         console.error('[penrose] drag failed', error);

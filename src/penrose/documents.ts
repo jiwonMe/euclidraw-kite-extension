@@ -11,7 +11,7 @@ import type {
 import { COMPUTED, EXTENSION_ID } from '../manifest.ts';
 import { DEFAULT_SCOPE_SIZE, DEFAULT_SOURCE } from './defaults.ts';
 import type { PenroseRuntime } from './runtime.ts';
-import { MEMBER_ASPECT, SCOPE_ASPECT, readSolverConfig, type PenroseMemberAspect, type PenroseScopeAspect, type ScopeSource } from './schema.ts';
+import { DEFAULT_SOLVER_CONFIG, MEMBER_ASPECT, SCOPE_ASPECT, readSolverConfig, type PenroseMemberAspect, type PenroseScopeAspect, type ScopeSource } from './schema.ts';
 import { type CompiledScope, type SolvedLayout } from './computed.ts';
 
 /**
@@ -217,7 +217,7 @@ export async function insertScope(host: PenroseHost, options: InsertOptions = {}
     varyingValues: [...compiled.varyingValues],
     pins: [],
     entityBindings: plan.bindings,
-    solverConfig: { maxSteps: 4000, dragSteps: 2 },
+    solverConfig: { ...DEFAULT_SOLVER_CONFIG },
   };
   commit(context, 'insert-scope', [
     { id: scopeId, aspect: 'core.transform', patch: { x: box.x, y: box.y, rotation: 0 } },

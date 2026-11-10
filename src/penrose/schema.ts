@@ -10,11 +10,14 @@ export const SCOPE_SCHEMA_VERSION = 2;
 export interface PenroseSolverConfig {
   readonly maxSteps: number;
   readonly dragSteps: number;
+  /** Wall-clock budget for re-converging during a drag frame (0 = fixed steps). */
+  readonly dragBudgetMs: number;
 }
 
 export const DEFAULT_SOLVER_CONFIG: PenroseSolverConfig = Object.freeze({
   maxSteps: 4000,
   dragSteps: 2,
+  dragBudgetMs: 10,
 });
 
 export interface PenroseScopeAspect extends Record<string, unknown> {
@@ -59,6 +62,7 @@ export function readSolverConfig(value: unknown): PenroseSolverConfig {
   return {
     maxSteps: number(record.maxSteps, DEFAULT_SOLVER_CONFIG.maxSteps),
     dragSteps: number(record.dragSteps, DEFAULT_SOLVER_CONFIG.dragSteps),
+    dragBudgetMs: number(record.dragBudgetMs, DEFAULT_SOLVER_CONFIG.dragBudgetMs),
   };
 }
 

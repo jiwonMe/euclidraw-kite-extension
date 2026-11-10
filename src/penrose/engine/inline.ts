@@ -25,11 +25,11 @@ export function createInlineEngine(): EngineClient {
     async layout(key: string, varyingValues?: readonly number[]): Promise<WireLayout> {
       return layoutOf(require(key), varyingValues);
     },
-    async drag(key: string, targets, steps: number): Promise<WireLayout> {
-      return dragSession(require(key), targets, steps);
+    async drag(key: string, targets, steps: number, budgetMs?: number): Promise<WireLayout> {
+      return dragSession(require(key), targets, steps, budgetMs);
     },
-    async pointDrag(key: string, handleId: string, target: { x: number; y: number }, steps: number): Promise<WireLayout> {
-      return dragPointSession(require(key), handleId, target, steps);
+    async pointDrag(key: string, handleId: string, target: { x: number; y: number }, steps: number, budgetMs?: number): Promise<WireLayout> {
+      return dragPointSession(require(key), handleId, target, steps, budgetMs);
     },
     async converge(key: string, maxSteps?: number): Promise<WireCompiled> {
       return convergeSession(require(key), maxSteps);

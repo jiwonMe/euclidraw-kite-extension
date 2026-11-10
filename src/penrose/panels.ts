@@ -2,7 +2,7 @@ import type { EntityId, WorkbenchPanelContext, WorkbenchPanelSpec } from '../hos
 import { COMMANDS, PANELS } from '../manifest.ts';
 import { type CompiledScope, type SolvedLayout } from './computed.ts';
 import { COMPUTED } from '../manifest.ts';
-import { MEMBER_ASPECT, SCOPE_ASPECT, type PenroseMemberAspect, type PenroseScopeAspect } from './schema.ts';
+import { MEMBER_ASPECT, SCOPE_ASPECT, readSolverConfig, type PenroseMemberAspect, type PenroseScopeAspect } from './schema.ts';
 
 const FONT = "12px/1.45 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
@@ -182,6 +182,7 @@ export function createDiagnosticsPanel(): WorkbenchPanelSpec {
           lines.push(`단계: ${layout.stages} · 에너지: ${layout.energy.toFixed(4)}`);
           lines.push(`shapes: ${layout.shapes.length}`);
           lines.push(`pins: ${scope?.pins.length ?? 0}`);
+          if (scope) lines.push(`드래그 수렴: ${readSolverConfig(scope.solverConfig).dragBudgetMs}ms 예산`);
         }
         body.textContent = lines.join('\n');
       };

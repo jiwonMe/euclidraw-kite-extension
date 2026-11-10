@@ -41,12 +41,12 @@ async function handle(request: EngineRequest) {
       }
       case 'drag': {
         const session = requireSession(request.key);
-        reply({ id: request.id, ok: true, layout: dragSession(session, request.targets, request.steps) });
+        reply({ id: request.id, ok: true, layout: dragSession(session, request.targets, request.steps, request.budgetMs) });
         return;
       }
       case 'point-drag': {
         const session = requireSession(request.key);
-        reply({ id: request.id, ok: true, layout: dragPointSession(session, request.handleId, request.target, request.steps) });
+        reply({ id: request.id, ok: true, layout: dragPointSession(session, request.handleId, request.target, request.steps, request.budgetMs) });
         return;
       }
       case 'converge': {

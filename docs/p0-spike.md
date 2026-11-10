@@ -11,7 +11,7 @@
 | 최종 확장 번들 | **3.1 MiB** | `dist/plugin.js`, 설치 한도 5 MiB 이하 |
 | 메인 청크 엔진 코드 | 0바이트 | 메인은 `@penrose/core`를 타입으로만 import |
 | 예제 컴파일 + 수렴 (Node, 인라인 엔진) | 37 ms | 기본 trio(점 3 · 원 1 · Equation · Text) |
-| 드래그 프레임 (Node, 인라인 엔진) | 중앙값 1.6 ms · p95 1.8 ms | 4개 도형, `stepTimes(2)` + 재핀 |
+| 드래그 프레임 (Node, 인라인 엔진) | 중앙값 1.7 ms · p95 2.2 ms | 4개 도형, 프레임 예산 재수렴 + 재핀 |
 | 첫 로드 후 레이아웃 | 8 ms | 캐시된 수렴값으로 `computeShapes`만 |
 
 실제 브라우저·실제 Web Worker·Tauri WebView에서 측정하지 않았습니다. 위 값은 Node + 인라인 엔진이며 워커 왕복 비용이 빠져 있습니다.
