@@ -144,8 +144,8 @@ async function askNumber(context: ActivationContext, prompt: string, current: nu
   return round(current);
 }
 
-export function addPoint(context: ActivationContext): unknown {
-  const selected = selectedScope(context);
+export function addPoint(context: ActivationContext, input: { entityId?: string } = {}): unknown {
+  const selected = selectedScope(context, input.entityId);
   if (!selected) throw new Error('Kite 스코프를 선택하세요.');
   const scope = readScope(selected.scope);
   const compiled = compileOrThrow(scope);
@@ -156,15 +156,15 @@ export function addPoint(context: ActivationContext): unknown {
   return applyDsl(context, { entityId: selected.scopeId, substanceDsl: appendSubstanceLine(scope, `Point ${id} = (${x}, ${y})`) });
 }
 
-export function freezeGeometry(context: ActivationContext): unknown {
-  const selected = selectedScope(context);
+export function freezeGeometry(context: ActivationContext, input: { entityId?: string } = {}): unknown {
+  const selected = selectedScope(context, input.entityId);
   if (!selected) throw new Error('Kite 스코프를 선택하세요.');
   const scope = readScope(selected.scope);
   return applyDsl(context, { entityId: selected.scopeId, substanceDsl: freezeSubstance(scope.substanceDsl) });
 }
 
-export function reproject(context: ActivationContext): unknown {
-  const selected = selectedScope(context);
+export function reproject(context: ActivationContext, input: { entityId?: string } = {}): unknown {
+  const selected = selectedScope(context, input.entityId);
   if (!selected) throw new Error('Kite 스코프를 선택하세요.');
   const scope = readScope(selected.scope);
   const compiled = compileOrThrow(scope);
@@ -177,8 +177,8 @@ export function reproject(context: ActivationContext): unknown {
   return { residual: state.residual, converged: state.converged };
 }
 
-export function repairBindings(context: ActivationContext): unknown {
-  const selected = selectedScope(context);
+export function repairBindings(context: ActivationContext, input: { entityId?: string } = {}): unknown {
+  const selected = selectedScope(context, input.entityId);
   if (!selected) throw new Error('Kite 스코프를 선택하세요.');
   const scope = readScope(selected.scope);
   const bindings: Record<string, EntityId> = {};
@@ -239,13 +239,19 @@ export async function addConstraint(context: ActivationContext): Promise<unknown
   return choices[0]!.run();
 }
 
+function inputOf(args: JsonValue | undefined): { entityId?: string } {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return {};
+  const record = args as { readonly [key: string]: JsonValue };
+  return typeof record.entityId === 'string' ? { entityId: record.entityId } : {};
+}
+
 export function createCommandSpecs(context: ActivationContext): CommandSpec[] {
   const run = (fn: () => unknown) => () => fn();
   return [
     { id: COMMANDS.insert, title: 'Kite 다이어그램 추가', summary: 'Domain · Substance · Style 예제와 멤버 엔티티를 한 번에 만듭니다.', shortcutScope: 'canvas', run: run(() => insertDiagram(context)) },
     { id: COMMANDS.apply, title: 'Kite DSL 적용', summary: '선택한 Kite 스코프의 세 DSL을 한 번의 Undo로 적용하고 다시 수렴합니다.', shortcutScope: 'canvas', run: (args?: JsonValue) => applyDsl(context, (args && typeof args === 'object' && !Array.isArray(args) ? args : {}) as Parameters<typeof applyDsl>[1]) },
-    { id: COMMANDS.reset, title: 'Kite 기본 예제로 복원', summary: '선택한 Kite 스코프를 기본 예제로 되돌립니다.', shortcutScope: 'canvas', run: run(() => resetExample(context)) },
-    { id: COMMANDS.addPoint, title: 'Kite 점 추가', summary: '선택한 스코프에 자유 점을 추가합니다.', shortcutScope: 'canvas', run: run(() => addPoint(context)) },
+    { id: COMMANDS.reset, title: 'Kite 기본 예제로 복원', summary: '선택한 Kite 스코프를 기본 예제로 되돌립니다.', shortcutScope: 'canvas', run: (args?: JsonValue) => resetExample(context, inputOf(args)) },
+    { id: COMMANDS.addPoint, title: 'Kite 점 추가', summary: '선택한 스코프에 자유 점을 추가합니다.', shortcutScope: 'canvas', run: (args?: JsonValue) => addPoint(context, inputOf(args)) },
     { id: COMMANDS.addConstraint, title: 'Kite 구속 추가', summary: '선택한 멤버 조합에 가능한 기하 구속을 제시합니다.', shortcutScope: 'canvas', run: () => addConstraint(context) },
     { id: COMMANDS.onCircle, title: 'Kite: 원 위에 배치', summary: '선택한 점과 원에 OnCircle 구속을 추가합니다.', shortcutScope: 'canvas', run: run(() => constrainOnCircle(context)) },
     { id: COMMANDS.midpoint, title: 'Kite: 중점', summary: '선택한 점을 두 점의 중점으로 구속합니다.', shortcutScope: 'canvas', run: run(() => constrainMidpoint(context)) },
@@ -255,9 +261,9 @@ export function createCommandSpecs(context: ActivationContext): CommandSpec[] {
     { id: COMMANDS.vertical, title: 'Kite: 수직', summary: '선택한 선분을 수직으로 구속합니다.', shortcutScope: 'canvas', run: run(() => constrainVertical(context)) },
     { id: COMMANDS.tangent, title: 'Kite: 접선', summary: '선택한 선분과 원을 접하도록 구속합니다.', shortcutScope: 'canvas', run: run(() => constrainTangent(context)) },
     { id: COMMANDS.distance, title: 'Kite: 거리 지정', summary: '선택한 두 점 사이 거리를 지정합니다.', shortcutScope: 'canvas', run: () => setDistance(context) },
-    { id: COMMANDS.freeze, title: 'Kite: 기하 고정', summary: '모든 구속을 제거하고 현재 좌표를 핀으로 고정합니다.', shortcutScope: 'canvas', run: run(() => freezeGeometry(context)) },
-    { id: COMMANDS.repair, title: 'Kite: 바인딩 복구', summary: '스코프의 substanceId ↔ 엔티티 바인딩을 실제 멤버에서 다시 만듭니다.', shortcutScope: 'canvas', run: run(() => repairBindings(context)) },
-    { id: COMMANDS.reproject, title: 'Kite: 다시 수렴', summary: '현재 정본에서 솔버를 다시 돌려 시드를 갱신합니다.', shortcutScope: 'canvas', run: run(() => reproject(context)) },
+    { id: COMMANDS.freeze, title: 'Kite: 기하 고정', summary: '모든 구속을 제거하고 현재 좌표를 핀으로 고정합니다.', shortcutScope: 'canvas', run: (args?: JsonValue) => freezeGeometry(context, inputOf(args)) },
+    { id: COMMANDS.repair, title: 'Kite: 바인딩 복구', summary: '스코프의 substanceId ↔ 엔티티 바인딩을 실제 멤버에서 다시 만듭니다.', shortcutScope: 'canvas', run: (args?: JsonValue) => repairBindings(context, inputOf(args)) },
+    { id: COMMANDS.reproject, title: 'Kite: 다시 수렴', summary: '현재 정본에서 솔버를 다시 돌려 시드를 갱신합니다.', shortcutScope: 'canvas', run: (args?: JsonValue) => reproject(context, inputOf(args)) },
   ];
 }
 

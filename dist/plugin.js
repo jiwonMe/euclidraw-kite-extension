@@ -2350,7 +2350,7 @@ async function dn(e) {
 		180,
 		240
 	]);
-	return i === null ? null : Z(e, `Distance(${t[0].substanceId}, ${t[1].substanceId}, ${Cn(i)})`);
+	return i === null ? null : Z(e, `Distance(${t[0].substanceId}, ${t[1].substanceId}, ${wn(i)})`);
 }
 function fn(e, t) {
 	return I(t, {
@@ -2375,7 +2375,7 @@ function mn(e, t, n, r) {
 async function hn(e, t, n, r) {
 	let i = e.getExtensionApi?.("sys.minibuffer");
 	if (i?.completingRead) {
-		let e = [.../* @__PURE__ */ new Set([Cn(n), ...r])];
+		let e = [.../* @__PURE__ */ new Set([wn(n), ...r])];
 		return i.completingRead({
 			prompt: t,
 			candidates: e.map((e) => ({
@@ -2385,79 +2385,79 @@ async function hn(e, t, n, r) {
 			}))
 		});
 	}
-	return Cn(n);
+	return wn(n);
 }
-function gn(e) {
-	let t = K(e);
-	if (!t) throw Error("Kite 스코프를 선택하세요.");
-	let n = v(t.scope), r = q(n), i = et(t.scopeId, e.world.getCanonicalView()), a = Xt(r, "P"), o = Math.round((i?.width ?? 520) / 2), s = Math.round((i?.height ?? 360) / 2);
+function gn(e, t = {}) {
+	let n = K(e, t.entityId);
+	if (!n) throw Error("Kite 스코프를 선택하세요.");
+	let r = v(n.scope), i = q(r), a = et(n.scopeId, e.world.getCanonicalView()), o = Xt(i, "P"), s = Math.round((a?.width ?? 520) / 2), c = Math.round((a?.height ?? 360) / 2);
 	return J(e, {
-		entityId: t.scopeId,
-		substanceDsl: Zt(n, `Point ${a} = (${o}, ${s})`)
+		entityId: n.scopeId,
+		substanceDsl: Zt(r, `Point ${o} = (${s}, ${c})`)
 	});
 }
-function _n(e) {
-	let t = K(e);
-	if (!t) throw Error("Kite 스코프를 선택하세요.");
-	let n = v(t.scope);
+function _n(e, t = {}) {
+	let n = K(e, t.entityId);
+	if (!n) throw Error("Kite 스코프를 선택하세요.");
+	let r = v(n.scope);
 	return J(e, {
-		entityId: t.scopeId,
-		substanceDsl: Qt(n.substanceDsl)
+		entityId: n.scopeId,
+		substanceDsl: Qt(r.substanceDsl)
 	});
 }
-function vn(e) {
-	let t = K(e);
-	if (!t) throw Error("Kite 스코프를 선택하세요.");
-	let n = v(t.scope), i = q(n), a = Ee(i, e.world.getCanonicalView()), o = I(i, {
-		seeds: n.convergedSeeds,
-		memberPins: a,
-		config: n.solverConfig,
+function vn(e, t = {}) {
+	let n = K(e, t.entityId);
+	if (!n) throw Error("Kite 스코프를 선택하세요.");
+	let i = v(n.scope), a = q(i), o = Ee(a, e.world.getCanonicalView()), s = I(a, {
+		seeds: i.convergedSeeds,
+		memberPins: o,
+		config: i.solverConfig,
 		iterations: 240
-	}), s = L(i, o.values);
+	}), c = L(a, s.values);
 	return Wt(e, () => {
 		e.world.applyCanonicalTransaction(l.reproject, [{
-			id: t.scopeId,
+			id: n.scopeId,
 			aspect: r,
-			patch: { convergedSeeds: s }
+			patch: { convergedSeeds: c }
 		}], "local:user");
 	}), {
-		residual: o.residual,
-		converged: o.converged
+		residual: s.residual,
+		converged: s.converged
 	};
 }
-function yn(e) {
-	let t = K(e);
-	if (!t) throw Error("Kite 스코프를 선택하세요.");
-	let n = v(t.scope), a = {}, o = [];
-	for (let n of e.world.listEntityIds()) {
-		let r = e.world.getCanonical(n, i);
-		r?.scopeId === t.scopeId && r.substanceId && (a[r.substanceId] ? o.push(n) : a[r.substanceId] = n);
+function yn(e, t = {}) {
+	let n = K(e, t.entityId);
+	if (!n) throw Error("Kite 스코프를 선택하세요.");
+	let a = v(n.scope), o = {}, s = [];
+	for (let t of e.world.listEntityIds()) {
+		let r = e.world.getCanonical(t, i);
+		r?.scopeId === n.scopeId && r.substanceId && (o[r.substanceId] ? s.push(t) : o[r.substanceId] = t);
 	}
-	let s = {
-		...n,
-		entityBindings: a
-	}, c = q(s), u = Ee(c, e.world.getCanonicalView()), d = L(c, I(c, {
-		seeds: s.convergedSeeds,
-		memberPins: u,
-		config: s.solverConfig,
+	let c = {
+		...a,
+		entityBindings: o
+	}, u = q(c), d = Ee(u, e.world.getCanonicalView()), f = L(u, I(u, {
+		seeds: c.convergedSeeds,
+		memberPins: d,
+		config: c.solverConfig,
 		iterations: 180
 	}).values);
 	return Wt(e, () => {
-		e.world.applyCanonicalTransaction(l.repair, [...o.map((e) => ({
+		e.world.applyCanonicalTransaction(l.repair, [...s.map((e) => ({
 			id: e,
 			aspect: i,
 			patch: null
 		})), {
-			id: t.scopeId,
+			id: n.scopeId,
 			aspect: r,
 			patch: {
-				entityBindings: a,
-				convergedSeeds: d
+				entityBindings: o,
+				convergedSeeds: f
 			}
 		}], "local:user");
 	}), {
-		bindings: Object.keys(a).length,
-		removed: o.length
+		bindings: Object.keys(o).length,
+		removed: s.length
 	};
 }
 function bn(e) {
@@ -2514,6 +2514,11 @@ async function xn(e) {
 	return t[0].run();
 }
 function Sn(e) {
+	if (!e || typeof e != "object" || Array.isArray(e)) return {};
+	let t = e;
+	return typeof t.entityId == "string" ? { entityId: t.entityId } : {};
+}
+function Cn(e) {
 	let t = (e) => () => e();
 	return [
 		{
@@ -2535,14 +2540,14 @@ function Sn(e) {
 			title: "Kite 기본 예제로 복원",
 			summary: "선택한 Kite 스코프를 기본 예제로 되돌립니다.",
 			shortcutScope: "canvas",
-			run: t(() => Yt(e))
+			run: (t) => Yt(e, Sn(t))
 		},
 		{
 			id: l.addPoint,
 			title: "Kite 점 추가",
 			summary: "선택한 스코프에 자유 점을 추가합니다.",
 			shortcutScope: "canvas",
-			run: t(() => gn(e))
+			run: (t) => gn(e, Sn(t))
 		},
 		{
 			id: l.addConstraint,
@@ -2612,29 +2617,29 @@ function Sn(e) {
 			title: "Kite: 기하 고정",
 			summary: "모든 구속을 제거하고 현재 좌표를 핀으로 고정합니다.",
 			shortcutScope: "canvas",
-			run: t(() => _n(e))
+			run: (t) => _n(e, Sn(t))
 		},
 		{
 			id: l.repair,
 			title: "Kite: 바인딩 복구",
 			summary: "스코프의 substanceId ↔ 엔티티 바인딩을 실제 멤버에서 다시 만듭니다.",
 			shortcutScope: "canvas",
-			run: t(() => yn(e))
+			run: (t) => yn(e, Sn(t))
 		},
 		{
 			id: l.reproject,
 			title: "Kite: 다시 수렴",
 			summary: "현재 정본에서 솔버를 다시 돌려 시드를 갱신합니다.",
 			shortcutScope: "canvas",
-			run: t(() => vn(e))
+			run: (t) => vn(e, Sn(t))
 		}
 	];
 }
-function Cn(e) {
+function wn(e) {
 	return Math.round(e * 100) / 100;
 }
 // src/tools/drag-session.ts
-var wn = class {
+var Tn = class {
 	scope;
 	compiled;
 	pins;
@@ -2673,10 +2678,10 @@ var wn = class {
 		} : {
 			substanceId: this.substanceId,
 			kind: "radius",
-			value: Tn(this.compiled, this.state, this.substanceId, e, t),
+			value: En(this.compiled, this.state, this.substanceId, e, t),
 			strength: .4
 		}, o = Ye(this.scope, this.compiled, this.pins, this.seeds, i, a);
-		return this.promotion = n ? En(this.scope, this.compiled, this.pins, this.substanceId, this.kind, e, t, r, o) : null, this.state = this.promotion ? Ye(this.scope, this.compiled, this.pins, L(this.compiled, o.values, this.seeds), i, a, [this.promotion.constraint]) : o, this.seeds = L(this.compiled, this.state.values, this.seeds), {
+		return this.promotion = n ? Dn(this.scope, this.compiled, this.pins, this.substanceId, this.kind, e, t, r, o) : null, this.state = this.promotion ? Ye(this.scope, this.compiled, this.pins, L(this.compiled, o.values, this.seeds), i, a, [this.promotion.constraint]) : o, this.seeds = L(this.compiled, this.state.values, this.seeds), {
 			seeds: this.seeds,
 			state: this.state,
 			promotion: this.promotion
@@ -2685,7 +2690,7 @@ var wn = class {
 	finish() {
 		let e = this.promotion ? [this.promotion.constraint] : [];
 		this.state = Ye(this.scope, this.compiled, this.pins, this.seeds, 90, void 0, e), this.seeds = L(this.compiled, this.state.values);
-		let t = this.promotion && !Dn(this.compiled, this.promotion.constraint) ? `${this.scope.substanceDsl.replace(/\s*$/, "")}\n${this.promotion.line}\n` : this.scope.substanceDsl;
+		let t = this.promotion && !On(this.compiled, this.promotion.constraint) ? `${this.scope.substanceDsl.replace(/\s*$/, "")}\n${this.promotion.line}\n` : this.scope.substanceDsl;
 		return {
 			seeds: this.seeds,
 			state: this.state,
@@ -2694,13 +2699,13 @@ var wn = class {
 		};
 	}
 };
-function Tn(e, t, n, r, i) {
+function En(e, t, n, r, i) {
 	let a = j(e);
 	a.values.set(t.values);
 	let o = M(a, e.instances.get(n)?.center ?? "");
 	return Math.max(1, Math.hypot(r - o.x, i - o.y));
 }
-function En(e, t, n, r, i, a, o, s, c) {
+function Dn(e, t, n, r, i, a, o, s, c) {
 	if (i !== "point" || !e.solverConfig.autoPromoteSnap) return null;
 	let l = j(t, n);
 	l.values.set(c.values);
@@ -2729,7 +2734,7 @@ function En(e, t, n, r, i, a, o, s, c) {
 			}, f = Math.hypot(a.x, a.y), p = Math.hypot(u.x, u.y);
 			if (f < 1e-6 || p < 1e-6) continue;
 			let m = Math.abs(Math.acos(Math.max(-1, Math.min(1, (a.x * u.x + a.y * u.y) / (f * p))))), h = Math.abs(m - Math.PI / 2);
-			h < 3 * Math.PI / 180 && !Dn(t, {
+			h < 3 * Math.PI / 180 && !On(t, {
 				type: "perpendicular",
 				a: e.id,
 				b: o.id
@@ -2759,7 +2764,7 @@ function En(e, t, n, r, i, a, o, s, c) {
 			"ray"
 		].includes(e.kind) || e.a === r || e.b === r) continue;
 		let n = M(l, e.a), i = M(l, e.b), a = Math.hypot(u.x - (n.x + i.x) / 2, u.y - (n.y + i.y) / 2);
-		a <= s && !Dn(t, {
+		a <= s && !On(t, {
 			type: "midpoint",
 			point: r,
 			a: e.a,
@@ -2786,7 +2791,7 @@ function En(e, t, n, r, i, a, o, s, c) {
 	for (let e of t.instances.values()) {
 		if (e.kind !== "circle") continue;
 		let n = M(l, e.center ?? ""), i = N(l, e.id), a = Math.abs(Math.hypot(u.x - n.x, u.y - n.y) - i);
-		a <= s && !Dn(t, {
+		a <= s && !On(t, {
 			type: "onCircle",
 			point: r,
 			circle: e.id
@@ -2810,7 +2815,7 @@ function En(e, t, n, r, i, a, o, s, c) {
 	}
 	return d.sort((e, t) => e.score - t.score), d[0]?.promotion ?? null;
 }
-function Dn(e, t) {
+function On(e, t) {
 	for (let n of e.constraints) if (n.type === t.type) {
 		if (t.type === "midpoint" && n.type === "midpoint") {
 			if (n.point === t.point && n.a === t.a && n.b === t.b) return !0;
@@ -2821,7 +2826,7 @@ function Dn(e, t) {
 	return !1;
 }
 // src/tools/kite-manipulate.ts
-var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "#6A6CD9", Nn = class {
+var kn = "root.select.core.select-suite:idle", An = 45, jn = 8, Mn = 3.5, Nn = "#6A6CD9", Pn = class {
 	context;
 	owner = `${t}:manipulate:${Math.random().toString(36).slice(2, 8)}`;
 	disposers = [];
@@ -2841,9 +2846,9 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 	constructor(e) {
 		this.context = e;
 		let t = e.services.get("canvas.active-tool-surface");
-		t ? (this.bind(t.get()), this.disposers.push(t.subscribe(() => this.bind(t.get())))) : this.bind(Fn(e));
+		t ? (this.bind(t.get()), this.disposers.push(t.subscribe(() => this.bind(t.get())))) : this.bind(In(e));
 		let n = e.services.get("canvas.frames");
-		this.disposers.push(n ? n.subscribe(() => this.tick()) : Ln(this.tick, 16));
+		this.disposers.push(n ? n.subscribe(() => this.tick()) : Rn(this.tick, 16));
 	}
 	dispose() {
 		if (!this.disposed) {
@@ -2890,7 +2895,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 		let t = e.surface.element.ownerDocument, n = t.createElementNS("http://www.w3.org/2000/svg", "svg");
 		n.dataset.role = "kite-locus", n.setAttribute("aria-hidden", "true"), n.style.cssText = "position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:4;";
 		let r = t.createElementNS("http://www.w3.org/2000/svg", "polyline");
-		r.setAttribute("fill", "none"), r.setAttribute("stroke", Mn), r.setAttribute("stroke-width", "1.5"), r.setAttribute("stroke-dasharray", "5 5"), r.setAttribute("stroke-opacity", "0.85"), n.append(r), e.surface.hud.append(n), this.hudSvg = n, this.locus = r;
+		r.setAttribute("fill", "none"), r.setAttribute("stroke", Nn), r.setAttribute("stroke-width", "1.5"), r.setAttribute("stroke-dasharray", "5 5"), r.setAttribute("stroke-opacity", "0.85"), n.append(r), e.surface.hud.append(n), this.hudSvg = n, this.locus = r;
 		let i = t.createElement("div");
 		i.dataset.role = "kite-snap-badge", i.style.cssText = "position:absolute;pointer-events:none;padding:4px 8px;border-radius:6px;background:rgba(17,24,39,0.92);color:#f8fafc;font:600 11px/1.35 system-ui,-apple-system,sans-serif;white-space:nowrap;display:none;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,0.25);", e.surface.hud.append(i), this.badge = i;
 	}
@@ -2945,9 +2950,9 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 			let r = `${this.owner}|p|${t.scopeId}|${n}`;
 			this.gizmoDisposers.push(e.selection.gizmos.register({
 				id: r,
-				priority: kn,
+				priority: An,
 				shape: "circle",
-				radiusScreenPx: An,
+				radiusScreenPx: jn,
 				getWorldPosition: (e) => this.handleWorld(t.scopeId, n, void 0, e),
 				onPointerDown: (e) => this.begin(t.scopeId, n, "point", e)
 			}));
@@ -2957,9 +2962,9 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 			let r = `${this.owner}|r|${t.scopeId}|${n}`;
 			this.gizmoDisposers.push(e.selection.gizmos.register({
 				id: r,
-				priority: kn,
+				priority: An,
 				shape: "circle",
-				radiusScreenPx: An,
+				radiusScreenPx: jn,
 				getWorldPosition: (e) => this.handleWorld(t.scopeId, n, "radius", e),
 				onPointerDown: (e) => this.begin(t.scopeId, n, "radius", e)
 			}));
@@ -2979,7 +2984,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 		return !0;
 	}
 	onPointerDown = (e) => {
-		if (this.gesture || e.button !== 0 || e.defaultPrevented || this.imeLocked() || this.surface?.host.isPanGesture?.(e) || this.surface?.host.isSelectionEnabled?.() === !1 || In(e)) return;
+		if (this.gesture || e.button !== 0 || e.defaultPrevented || this.imeLocked() || this.surface?.host.isPanGesture?.(e) || this.surface?.host.isSelectionEnabled?.() === !1 || Ln(e)) return;
 		let t = {
 			id: "",
 			priority: 0,
@@ -3003,7 +3008,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 		this.surface.host.screenToWorld(e.clientX, e.clientY, o);
 		let s = tt(a, o.x, o.y), c = R(i), l = Je(i, this.context.world.getCanonicalView()), u = j(c, l.pins);
 		u.values.set(l.state.values);
-		let d = An / Math.max(.001, this.surface.host.getZoom()), f;
+		let d = jn / Math.max(.001, this.surface.host.getZoom()), f;
 		for (let e of n.substanceIds) {
 			let t = M(u, e), n = Math.hypot(t.x - s.x, t.y - s.y);
 			n <= d && (!f || n < f.distance) && (f = {
@@ -3022,7 +3027,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 		let l = Ee(c, this.context.world.getCanonicalView()), u = {
 			...o,
 			solverConfig: { ...o.solverConfig }
-		}, d = new wn(u, c, l, n, i);
+		}, d = new Tn(u, c, l, n, i);
 		return this.gesture = {
 			pointer: a.pointerId,
 			clientX: a.clientX,
@@ -3043,12 +3048,12 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 	}
 	onPointerMove = (e) => {
 		let t = this.gesture;
-		t && t.pointer === e.pointerId && (t.clientX = e.clientX, t.clientY = e.clientY, t.shift = e.shiftKey, t.moved ||= Math.hypot(e.clientX - t.startX, e.clientY - t.startY) >= jn, this.updateBadge(), e.preventDefault(), e.stopImmediatePropagation());
+		t && t.pointer === e.pointerId && (t.clientX = e.clientX, t.clientY = e.clientY, t.shift = e.shiftKey, t.moved ||= Math.hypot(e.clientX - t.startX, e.clientY - t.startY) >= Mn, this.updateBadge(), e.preventDefault(), e.stopImmediatePropagation());
 	};
 	onPointerUp = (e) => {
 		let t = this.gesture;
 		if (!t || t.pointer !== e.pointerId) return;
-		t.clientX = e.clientX, t.clientY = e.clientY, t.moved ||= Math.hypot(e.clientX - t.startX, e.clientY - t.startY) >= jn, t.moved && this.applyGesture();
+		t.clientX = e.clientX, t.clientY = e.clientY, t.moved ||= Math.hypot(e.clientX - t.startX, e.clientY - t.startY) >= Mn, t.moved && this.applyGesture();
 		let n = t.session.finish(), r = n.substanceDsl !== t.scope.substanceDsl;
 		if (this.finishGesture(), t.moved && (r || JSON.stringify(n.seeds) !== JSON.stringify(t.scope.convergedSeeds))) {
 			let e = { convergedSeeds: n.seeds };
@@ -3080,7 +3085,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 		let e = this.gesture;
 		if (this.gesture = void 0, this.scratch?.clear(), this.locus?.setAttribute("points", ""), this.badge && (this.badge.style.display = "none"), this.surface) {
 			try {
-				this.surface.selection.stateMachine.transition(On);
+				this.surface.selection.stateMachine.transition(kn);
 			} catch {}
 			if (e) try {
 				this.surface.surface.element.releasePointerCapture?.(e.pointer);
@@ -3118,7 +3123,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 	updateLocus() {
 		let e = this.gesture;
 		if (!e || !this.locus || !this.surface) return;
-		let t = Pn(e, this.surface);
+		let t = Fn(e, this.surface);
 		this.locus.setAttribute("points", t);
 	}
 	imeLocked(e) {
@@ -3128,7 +3133,7 @@ var On = "root.select.core.select-suite:idle", kn = 45, An = 8, jn = 3.5, Mn = "
 		this.surface?.host.onError?.(e);
 	}
 };
-function Pn(e, t) {
+function Fn(e, t) {
 	let n = j(e.compiled, e.pins);
 	n.values.set(e.session.currentState().values);
 	let r = [], i = {
@@ -3186,7 +3191,7 @@ function Pn(e, t) {
 	}
 	return r.map((e) => `${Math.round(e.x * 10) / 10},${Math.round(e.y * 10) / 10}`).join(" ");
 }
-function Fn(e) {
+function In(e) {
 	let t = e.services.get("canvas.surface"), n = e.services.get("canvas.interaction"), r;
 	try {
 		r = e.services.get("canvas.selection");
@@ -3225,16 +3230,16 @@ function Fn(e) {
 		}
 	};
 }
-function In(e) {
+function Ln(e) {
 	let t = (e) => e instanceof Element && !!e.closest("[data-canvas-ui],button,input,textarea,select,[contenteditable]:not([contenteditable=\"false\"])");
 	return t(e.target) || e.composedPath().some(t);
 }
-function Ln(e, t) {
+function Rn(e, t) {
 	let n = setInterval(e, t);
 	return () => clearInterval(n);
 }
 // src/panel/tri-editor.ts
-var Rn = [
+var zn = [
 	{
 		id: "domain",
 		field: "domainDsl",
@@ -3251,7 +3256,7 @@ var Rn = [
 		label: "Style"
 	}
 ];
-function zn() {
+function Bn() {
 	return {
 		panelId: o.triEditor,
 		title: "Kite Tri-DSL",
@@ -3265,11 +3270,11 @@ function zn() {
 		inspectorFor: r,
 		isolation: "container",
 		mount(e, t) {
-			return Bn(e, t);
+			return Vn(e, t);
 		}
 	};
 }
-function Bn(e, t) {
+function Vn(e, t) {
 	let n = e.ownerDocument, i = new ((n.defaultView?.AbortController) ?? AbortController)(), a = i.signal;
 	e.replaceChildren(), e.style.cssText = "display:flex;flex-direction:column;gap:0;height:100%;min-height:0;background:var(--alid-bg-surface,#fff);color:var(--alid-text-primary,#18181b);";
 	let o = () => {
@@ -3281,7 +3286,7 @@ function Bn(e, t) {
 	}, s = o(), c = s ? v(t.world.getCanonical(s, r)) : void 0, u = "substance", d = !1, f = Q(n, "div", "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--alid-border-subtle,#e4e4e7);"), p = Q(n, "div", "font:600 12px/1.3 system-ui,sans-serif;letter-spacing:0.01em;", "Kite Tri-DSL"), m = Q(n, "div", "font:500 10.5px/1.3 system-ui,sans-serif;color:var(--alid-text-muted,#71717a);white-space:nowrap;", "스코프 선택 없음");
 	f.append(p, m);
 	let h = Q(n, "div", "display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--alid-border-subtle,#e4e4e7);"), g = /* @__PURE__ */ new Map();
-	for (let e of Rn) {
+	for (let e of zn) {
 		let t = Q(n, "button", "appearance:none;border:0;border-bottom:2px solid transparent;background:transparent;padding:6px 9px 7px;font:600 11.5px/1.2 system-ui,sans-serif;color:var(--alid-text-muted,#71717a);cursor:pointer;border-radius:6px 6px 0 0;", e.label);
 		t.type = "button", t.dataset.tab = e.id, t.addEventListener("click", () => {
 			d && D(), u = e.id, ie();
@@ -3293,7 +3298,7 @@ function Bn(e, t) {
 	x.append(ee, S);
 	let C = Q(n, "div", "display:none;padding:8px 12px;border-top:1px solid var(--alid-border-subtle,#e4e4e7);max-height:130px;overflow:auto;");
 	C.dataset.role = "kite-style-params";
-	let te = Q(n, "div", "display:flex;align-items:center;gap:6px;padding:9px 12px;border-top:1px solid var(--alid-border-subtle,#e4e4e7);"), ne = Vn(n, "적용", "background:#2563eb;color:#fff;border:0;"), w = Vn(n, "예제 복원", "background:transparent;color:var(--alid-text-secondary,#52525b);border:1px solid var(--alid-border-subtle,#d4d4d8);"), re = Q(n, "div", "flex:1;"), T = Q(n, "div", "font:500 10.5px/1.3 system-ui,sans-serif;color:var(--alid-text-muted,#71717a);text-align:right;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;");
+	let te = Q(n, "div", "display:flex;align-items:center;gap:6px;padding:9px 12px;border-top:1px solid var(--alid-border-subtle,#e4e4e7);"), ne = Hn(n, "적용", "background:#2563eb;color:#fff;border:0;"), w = Hn(n, "예제 복원", "background:transparent;color:var(--alid-text-secondary,#52525b);border:1px solid var(--alid-border-subtle,#d4d4d8);"), re = Q(n, "div", "flex:1;"), T = Q(n, "div", "font:500 10.5px/1.3 system-ui,sans-serif;color:var(--alid-text-muted,#71717a);text-align:right;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;");
 	te.append(ne, w, re, T), e.append(f, h, _, x, C, te);
 	let E = {
 		domain: "",
@@ -3303,7 +3308,7 @@ function Bn(e, t) {
 	function D() {
 		if (!c) return;
 		E[u] = b.value;
-		let e = Rn.find((e) => e.id === u).field;
+		let e = zn.find((e) => e.id === u).field;
 		c[e] = b.value, d = !0;
 	}
 	function O() {
@@ -3327,35 +3332,35 @@ function Bn(e, t) {
 			substanceDsl: E.substance,
 			styleDsl: E.style
 		});
-		m.textContent = e.ok ? `${e.instances.size}개 개체 · ${e.constraints.length}개 구속${d ? " · 미적용" : ""}` : `오류 ${e.errors.length}개`, m.style.color = e.ok ? "var(--alid-text-muted,#71717a)" : "var(--alid-danger,#dc2626)", T.textContent = e.errors[0] ? `L${e.errors[0].line}: ${e.errors[0].message}` : d ? "Ctrl/⌘+Enter로 적용" : "정본과 동기화됨", T.style.color = e.errors[0] ? "var(--alid-danger,#b91c1c)" : "var(--alid-text-muted,#71717a)", k(e), ae();
+		m.textContent = e.ok ? `${e.instances.size}개 개체 · ${e.constraints.length}개 구속${d ? " · 미적용" : ""}` : `오류 ${e.errors.length}개`, m.style.color = e.ok ? "var(--alid-text-muted,#71717a)" : "var(--alid-danger,#dc2626)", T.textContent = e.errors[0] ? `L${e.errors[0].line}: ${e.errors[0].message}` : d ? "Ctrl/⌘+Enter로 적용" : "정본과 동기화됨", T.style.color = e.errors[0] ? "var(--alid-danger,#b91c1c)" : "var(--alid-text-muted,#71717a)", k(), ae();
 	}
-	function k(e) {
+	function k() {
 		if (S.replaceChildren(), !s || !t.getSelectedIds().length) {
 			x.style.display = "none";
 			return;
 		}
-		let r = /* @__PURE__ */ new Set();
-		for (let e of t.getSelectedIds()) {
-			let n = t.world.getCanonical(e, "kite.member");
-			n?.scopeId === s && n.substanceId && r.add(n.substanceId);
+		let e = /* @__PURE__ */ new Set();
+		for (let n of t.getSelectedIds()) {
+			let r = t.world.getCanonical(n, "kite.member");
+			r?.scopeId === s && r.substanceId && e.add(r.substanceId);
 		}
-		if (!r.size) {
+		if (!e.size) {
 			x.style.display = "none";
 			return;
 		}
-		let i = [];
-		if (E.substance.split("\n").forEach((e, t) => {
-			for (let n of r) if (e.includes(n)) {
-				i.push({
-					line: t,
-					text: e.trim()
+		let r = [];
+		if (E.substance.split("\n").forEach((t, n) => {
+			for (let i of e) if (t.includes(i)) {
+				r.push({
+					line: n,
+					text: t.trim()
 				});
 				break;
 			}
-		}), !i.length) x.style.display = "none";
+		}), !r.length) x.style.display = "none";
 		else {
 			x.style.display = "block";
-			for (let e of i.slice(0, 8)) {
+			for (let e of r.slice(0, 8)) {
 				let t = n.createElement("button");
 				t.type = "button", t.style.cssText = "appearance:none;text-align:left;border:0;background:transparent;padding:2px 4px;border-radius:4px;font:11px/1.4 ui-monospace,monospace;color:var(--alid-text-secondary,#52525b);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", t.textContent = `L${e.line + 1}  ${e.text}`, t.addEventListener("click", () => {
 					u = "substance", ie();
@@ -3376,7 +3381,7 @@ function Bn(e, t) {
 			i.type = "range", i.min = String(Math.min(0, t.value * .2)), i.max = String(Math.max(24, t.value * 3)), i.step = "0.5", i.value = String(t.value), i.style.cssText = "width:100%;accent-color:var(--alid-accent,#2563eb);";
 			let o = Q(n, "div", "font:11px/1.2 ui-monospace,monospace;text-align:right;color:var(--alid-text-secondary,#52525b);", String(t.value));
 			i.addEventListener("input", () => {
-				o.textContent = i.value, E.style = Hn(E.style, t.selector, t.key, Number(i.value)), c.styleDsl = E.style, d = !0, b.value = E.style, y.textContent = Array.from({ length: Math.max(1, E.style.split("\n").length) }, (e, t) => String(t + 1)).join("\n"), T.textContent = "Ctrl/⌘+Enter로 적용";
+				o.textContent = i.value, E.style = Un(E.style, t.selector, t.key, Number(i.value)), c.styleDsl = E.style, d = !0, b.value = E.style, y.textContent = Array.from({ length: Math.max(1, E.style.split("\n").length) }, (e, t) => String(t + 1)).join("\n"), T.textContent = "Ctrl/⌘+Enter로 적용";
 			}, { signal: a }), e.append(r, i, o), C.append(e);
 		}
 	}
@@ -3432,18 +3437,18 @@ function Q(e, t, n, r) {
 	let i = e.createElement(t);
 	return i.style.cssText = n, r !== void 0 && (i.textContent = r), i;
 }
-function Vn(e, t, n) {
+function Hn(e, t, n) {
 	let r = e.createElement("button");
 	return r.type = "button", r.textContent = t, r.style.cssText = `appearance:none;border-radius:6px;padding:5px 10px;font:600 11px/1.25 system-ui,sans-serif;cursor:pointer;${n}`, r;
 }
-function Hn(e, t, n, r) {
-	return e.replace(/([^{}]+)\{([^{}]*)\}/g, (e, i, a) => i.replace(/(^|\n)\s*(#|\/\/).*$/gm, "$1").replace(/\s+/g, " ").split(",").map((e) => e.trim()).includes(t) ? `${i}{${a.replace(RegExp(`(^|;)\\s*${Un(n)}\\s*:\\s*-?(?:\\d+(?:\\.\\d+)?)`, "g"), (e, t) => `${t} ${n}: ${r}`)}}` : e);
+function Un(e, t, n, r) {
+	return e.replace(/([^{}]+)\{([^{}]*)\}/g, (e, i, a) => i.replace(/(^|\n)\s*(#|\/\/).*$/gm, "$1").replace(/\s+/g, " ").split(",").map((e) => e.trim()).includes(t) ? `${i}{${a.replace(RegExp(`(^|;)\\s*${Wn(n)}\\s*:\\s*-?(?:\\d+(?:\\.\\d+)?)`, "g"), (e, t) => `${t} ${n}: ${r}`)}}` : e);
 }
-function Un(e) {
+function Wn(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 // src/panel/diagnostics.ts
-function Wn() {
+function Gn() {
 	return {
 		panelId: o.diagnostics,
 		title: "Kite 진단",
@@ -3451,14 +3456,14 @@ function Wn() {
 		defaultZone: "bottom",
 		isolation: "container",
 		mount(e, t) {
-			return Gn(e, t);
+			return Kn(e, t);
 		}
 	};
 }
-function Gn(e, t) {
+function Kn(e, t) {
 	let n = e.ownerDocument, i = new ((n.defaultView?.AbortController) ?? AbortController)(), a = i.signal;
 	e.replaceChildren(), e.style.cssText = "display:flex;flex-direction:column;gap:6px;padding:9px 12px;height:100%;box-sizing:border-box;overflow:auto;background:var(--alid-bg-surface,#fff);color:var(--alid-text-primary,#18181b);font:11px/1.4 system-ui,sans-serif;";
-	let o = $(n, "div", "display:flex;align-items:center;gap:8px;flex-wrap:wrap;"), s = $(n, "div", "font:600 12px/1.3 system-ui,sans-serif;", "Kite 진단"), c = $(n, "div", "display:flex;gap:10px;flex-wrap:wrap;color:var(--alid-text-secondary,#52525b);font-variant-numeric:tabular-nums;"), u = $(n, "div", "flex:1;"), d = Kn(n, "다시 수렴", "background:#2563eb;color:#fff;border:0;"), f = Kn(n, "기하 고정", "background:transparent;color:var(--alid-text-secondary,#52525b);border:1px solid var(--alid-border-subtle,#d4d4d8);");
+	let o = $(n, "div", "display:flex;align-items:center;gap:8px;flex-wrap:wrap;"), s = $(n, "div", "font:600 12px/1.3 system-ui,sans-serif;", "Kite 진단"), c = $(n, "div", "display:flex;gap:10px;flex-wrap:wrap;color:var(--alid-text-secondary,#52525b);font-variant-numeric:tabular-nums;"), u = $(n, "div", "flex:1;"), d = qn(n, "다시 수렴", "background:#2563eb;color:#fff;border:0;"), f = qn(n, "기하 고정", "background:transparent;color:var(--alid-text-secondary,#52525b);border:1px solid var(--alid-border-subtle,#d4d4d8);");
 	o.append(s, c, u, d, f);
 	let p = $(n, "div", "color:var(--alid-text-muted,#71717a);"), m = $(n, "div", "display:flex;flex-direction:column;gap:3px;"), h = $(n, "div", "padding:10px 0;color:var(--alid-text-muted,#71717a);", "Kite 스코프를 선택하면 자유도와 잔차를 계산합니다.");
 	e.append(o, p, m, h);
@@ -3477,10 +3482,10 @@ function Gn(e, t) {
 		}
 		h.style.display = "none";
 		let a = Je(v(i), t.world.getCanonicalView()), o = Ze(a.compiled, a.state, a.pins);
-		if (c.replaceChildren(qn(n, "DOF", `${o.totalDofs}`), qn(n, "구속", `${o.constrainedDofs}`), qn(n, "잔여", `${o.remainingDofs}`), qn(n, "잔차", Jn(o.residual)), qn(n, "반복", `${o.iterations}`)), p.textContent = [o.converged ? "수렴됨" : o.dirty ? "초기 배치 계산됨 (정본 시드 불일치)" : "수렴 중", ...o.notes].join(" · "), p.style.color = o.converged && !o.notes.length ? "var(--alid-success,#15803d)" : o.remainingDofs === 0 && !o.converged ? "var(--alid-danger,#b91c1c)" : "var(--alid-text-muted,#71717a)", m.replaceChildren(), !o.overConstrained.length) m.append($(n, "div", "color:var(--alid-text-muted,#71717a);", o.constraintCount ? "잔차가 큰 구속이 없습니다." : "구속이 없습니다."));
+		if (c.replaceChildren(Jn(n, "DOF", `${o.totalDofs}`), Jn(n, "구속", `${o.constrainedDofs}`), Jn(n, "잔여", `${o.remainingDofs}`), Jn(n, "잔차", Yn(o.residual)), Jn(n, "반복", `${o.iterations}`)), p.textContent = [o.converged ? "수렴됨" : o.dirty ? "초기 배치 계산됨 (정본 시드 불일치)" : "수렴 중", ...o.notes].join(" · "), p.style.color = o.converged && !o.notes.length ? "var(--alid-success,#15803d)" : o.remainingDofs === 0 && !o.converged ? "var(--alid-danger,#b91c1c)" : "var(--alid-text-muted,#71717a)", m.replaceChildren(), !o.overConstrained.length) m.append($(n, "div", "color:var(--alid-text-muted,#71717a);", o.constraintCount ? "잔차가 큰 구속이 없습니다." : "구속이 없습니다."));
 		else for (let e of o.overConstrained) {
 			let t = $(n, "div", "display:grid;grid-template-columns:52px 1fr 74px;gap:8px;align-items:center;padding:3px 6px;border-radius:5px;background:color-mix(in srgb, var(--alid-danger,#dc2626) 6%, transparent);");
-			t.append($(n, "span", "color:var(--alid-danger,#b91c1c);font:600 10px/1.2 ui-monospace,monospace;", `L${e.line}`), $(n, "span", "font:11px/1.35 ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", e.text), $(n, "span", "text-align:right;font:10.5px/1.2 ui-monospace,monospace;color:var(--alid-danger,#b91c1c);", Jn(e.residual))), m.append(t);
+			t.append($(n, "span", "color:var(--alid-danger,#b91c1c);font:600 10px/1.2 ui-monospace,monospace;", `L${e.line}`), $(n, "span", "font:11px/1.35 ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", e.text), $(n, "span", "text-align:right;font:10.5px/1.2 ui-monospace,monospace;color:var(--alid-danger,#b91c1c);", Yn(e.residual))), m.append(t);
 		}
 	}
 	d.addEventListener("click", () => {
@@ -3502,38 +3507,38 @@ function $(e, t, n, r) {
 	let i = e.createElement(t);
 	return i.style.cssText = n, r !== void 0 && (i.textContent = r), i;
 }
-function Kn(e, t, n) {
+function qn(e, t, n) {
 	let r = e.createElement("button");
 	return r.type = "button", r.textContent = t, r.style.cssText = `appearance:none;border-radius:6px;padding:4px 9px;font:600 10.5px/1.25 system-ui,sans-serif;cursor:pointer;${n}`, r;
 }
-function qn(e, t, n) {
+function Jn(e, t, n) {
 	let r = e.createElement("span"), i = e.createElement("span");
 	i.textContent = `${t} `, i.style.color = "var(--alid-text-muted,#71717a)";
 	let a = e.createElement("span");
 	return a.textContent = n, a.style.fontWeight = "600", r.append(i, a), r;
 }
-function Jn(e) {
+function Yn(e) {
 	return Number.isFinite(e) ? e === 0 ? "0" : e < .001 || e >= 1e4 ? e.toExponential(1) : e.toFixed(e < 1 ? 3 : 2) : "—";
 }
 // src/index.ts
-var Yn = Object.freeze({ paths: Object.freeze([
+var Xn = Object.freeze({ paths: Object.freeze([
 	"M3 17L10 6l3 6 3-3 5 8",
 	"M10 6v12",
 	"M16 6v12"
-]) }), Xn = {
+]) }), Zn = {
 	...u(),
 	summary: n,
 	aspects: [{
 		...Ft,
-		ui: { panels: [zn()] }
+		ui: { panels: [Bn()] }
 	}, It],
 	ui: {
-		panels: [Wn()],
+		panels: [Gn()],
 		controls: [{
 			id: "kite.insert.shelf",
 			kind: "action",
 			label: "Kite 다이어그램",
-			icon: Yn,
+			icon: Xn,
 			commandSymbol: l.insert,
 			placement: "tool-shelf",
 			requiresSelection: !1
@@ -3555,9 +3560,9 @@ var Yn = Object.freeze({ paths: Object.freeze([
 	activate(e) {
 		let t = !0, n = () => {
 			if (!t) throw Error("Kite Studio 확장이 비활성화되었습니다. 공개 API를 다시 조회하세요.");
-		}, r = [], i = Sn(e);
+		}, r = [], i = Cn(e);
 		for (let t of i) r.push(e.commands.register(t));
-		let o = new Nn(e);
+		let o = new Pn(e);
 		r.push(() => o.dispose());
 		let s = Object.freeze({
 			version: d.version,
@@ -3589,4 +3594,4 @@ var Yn = Object.freeze({ paths: Object.freeze([
 		};
 	}
 };
-export { Xn as default };
+export { Zn as default };

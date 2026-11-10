@@ -22,7 +22,7 @@
   "title": "Kite Studio",
   "summary": "Domain · Substance · Style 3분할 DSL과 다양체 정사영 솔버로, 구속 조건이 살아있는 기하 도해를 캔버스에 만듭니다.",
   "entry": "dist/plugin.js",
-  "sha256": "4e4e9cdd6c4ab2558dce09dadd300fe9ad19631ebfe5ed38bcc6ba484fd8c853",
+  "sha256": "5a8c37d34fe7a50fb0628290a37fec9c7b86ed204d3d5b825da4c7df2d3e87f6",
   "aspectIds": [
     "kite.scope",
     "kite.member"

@@ -137,11 +137,11 @@ function mountTriEditor(host: HTMLElement, context: WorkbenchPanelContext): () =
     status.style.color = compiled.ok ? 'var(--alid-text-muted,#71717a)' : 'var(--alid-danger,#dc2626)';
     info.textContent = compiled.errors[0] ? `L${compiled.errors[0].line}: ${compiled.errors[0].message}` : dirty ? 'Ctrl/⌘+Enter로 적용' : '정본과 동기화됨';
     info.style.color = compiled.errors[0] ? 'var(--alid-danger,#b91c1c)' : 'var(--alid-text-muted,#71717a)';
-    renderLinked(compiled);
+    renderLinked();
     renderStyleParams();
   }
 
-  function renderLinked(compiled: ReturnType<typeof compileScope>): void {
+  function renderLinked(): void {
     linkedList.replaceChildren();
     if (!scopeId || !context.getSelectedIds().length) { linked.style.display = 'none'; return; }
     const selectedSubstance = new Set<string>();
@@ -172,7 +172,6 @@ function mountTriEditor(host: HTMLElement, context: WorkbenchPanelContext): () =
       }, { signal });
       linkedList.append(row);
     }
-    void compiled;
   }
 
   function renderStyleParams(): void {
