@@ -371,40 +371,40 @@ function he(e, t) {
 	let [n, r] = N(t, D(e.props.center)), i = T(e.props.height), a = T(e.props.descent), o = r + i / 2 - a, s = T(e.props.rotation), c = s ? ` transform="rotate(${O(s)} ${O(n)} ${O(o)})"` : "", l = E(e.props.textAnchor, "middle") || "middle", u = E(e.props.string), d = u.split("\n"), f = d.length > 1 ? d.map((t, r) => `<tspan x="${O(n)}" dy="${r === 0 ? 0 : O(Number.parseFloat(E(e.props.fontSize, "14")) * 1.2)}">${w(t)}</tspan>`).join("") : w(u);
 	return `<text x="${O(n)}" y="${O(o)}" font="${w(me(e))}" text-anchor="${w(l)}" dominant-baseline="alphabetic"${P(e)}${F(e)}${c}${M(e)}>${f}</text>`;
 }
-function ge(e) {
+function L(e) {
 	return e.replace(/<\s*(script|foreignObject|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "").replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*\/?>/gi, "").replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "").replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "").replace(/javascript:/gi, "");
 }
-function _e(e, t) {
+function ge(e, t) {
 	let n = t.canvas, [r, i] = N(n, D(e.props.center)), a = Math.max(0, T(e.props.width)), o = Math.max(0, T(e.props.height)), s = T(e.props.rotation), c = `translate(${O(r - a / 2)} ${O(i - o / 2)})` + (s ? ` rotate(${O(s)} ${O(a / 2)} ${O(o / 2)})` : ""), l = t.labels?.[e.name];
 	if (!l) {
 		let t = w(E(e.props.string));
 		return `<text x="${O(r)}" y="${O(i + o / 2 - T(e.props.descent))}" text-anchor="middle"${P(e)}${M(e)}>${t}</text>`;
 	}
-	return `<g transform="${c}"${P(e)}>${ge(l)}</g>`;
+	return `<g transform="${c}"${P(e)}>${L(l)}</g>`;
 }
-function ve(e, t) {
+function _e(e, t) {
 	let n = E(e.props.href);
 	if (!n.startsWith("data:image/")) return "";
 	let [r, i] = N(t, D(e.props.center)), a = Math.max(0, T(e.props.width)), o = Math.max(0, T(e.props.height)), s = T(e.props.rotation), c = `translate(${O(r - a / 2)} ${O(i - o / 2)})` + (s ? ` rotate(${O(s)} ${O(a / 2)} ${O(o / 2)})` : "");
 	if (n.startsWith("data:image/svg+xml")) try {
-		return `<g transform="${c}">${ge(decodeURIComponent(n.slice(18).replace(/^[;,]+/, ""))).replace(/<svg\b([^>]*)>/, (e, t) => `<svg${t.replace(/\s(width|height|x|y)=("[^"]*"|'[^']*')/gi, "").replace(/\sviewBox=("[^"]*"|'[^']*')/gi, "")} width="${O(a)}" height="${O(o)}" preserveAspectRatio="xMidYMid meet">`)}</g>`;
+		return `<g transform="${c}">${L(decodeURIComponent(n.slice(18).replace(/^[;,]+/, ""))).replace(/<svg\b([^>]*)>/, (e, t) => `<svg${t.replace(/\s(width|height|x|y)=("[^"]*"|'[^']*')/gi, "").replace(/\sviewBox=("[^"]*"|'[^']*')/gi, "")} width="${O(a)}" height="${O(o)}" preserveAspectRatio="xMidYMid meet">`)}</g>`;
 	} catch {
 		return "";
 	}
 	return `<image href="${w(n)}" x="0" y="0" width="${O(a)}" height="${O(o)}" transform="${c}" preserveAspectRatio="${w(E(e.props.preserveAspectRatio, "xMidYMid meet"))}"/>`;
 }
-function ye(e, t) {
+function ve(e, t) {
 	let n = e.children ?? [], r = e.clip, i = "<g>", a;
-	r && r.length && (a = `${t.idPrefix ?? "penrose"}-${e.name.replace(/[^\w-]/g, "_")}-clip`, i += `<clipPath id="${w(a)}">${r.map((e) => L(e, t)).join("")}</clipPath>`);
+	r && r.length && (a = `${t.idPrefix ?? "penrose"}-${e.name.replace(/[^\w-]/g, "_")}-clip`, i += `<clipPath id="${w(a)}">${r.map((e) => R(e, t)).join("")}</clipPath>`);
 	let o = r && r.length ? r[0]?.name : void 0;
 	for (let e of n) {
 		if (o && e.name === o) continue;
-		let n = L(e, t);
+		let n = R(e, t);
 		i += a ? `<g clip-path="url(#${w(a)})">${n}</g>` : n;
 	}
 	return i + M(e) + "</g>";
 }
-function L(e, t) {
+function R(e, t) {
 	switch (e.shapeType) {
 		case "Circle": return se(e, t.canvas);
 		case "Ellipse": return ce(e, t.canvas);
@@ -414,16 +414,16 @@ function L(e, t) {
 		case "Rectangle": return de(e, t.canvas);
 		case "Path": return pe(e, t.canvas);
 		case "Text": return he(e, t.canvas);
-		case "Equation": return _e(e, t);
-		case "Image": return ve(e, t.canvas);
-		case "Group": return ye(e, t);
+		case "Equation": return ge(e, t);
+		case "Image": return _e(e, t.canvas);
+		case "Group": return ve(e, t);
 		default: return "";
 	}
 }
-function be(e, t) {
-	return e.map((e) => L(e, t)).join("");
+function ye(e, t) {
+	return e.map((e) => R(e, t)).join("");
 }
-function R(e) {
+function z(e) {
 	let t = Math.max(0, T(e.props.strokeWidth)) / 2, n = Infinity, r = Infinity, i = -Infinity, a = -Infinity, o = (e, t, o = 0) => {
 		n = Math.min(n, e - o), i = Math.max(i, e + o), r = Math.min(r, t - o), a = Math.max(a, t + o);
 	};
@@ -468,7 +468,7 @@ function R(e) {
 		}
 		case "Group":
 			for (let t of e.children ?? []) {
-				let e = R(t);
+				let e = z(t);
 				e && (o(e.x, e.y), o(e.x + e.width, e.y + e.height));
 			}
 			break;
@@ -481,7 +481,7 @@ function R(e) {
 		height: Math.max(.001, a - r + t * 2)
 	};
 }
-function xe(e) {
+function be(e) {
 	let t = {}, n = (e, n) => {
 		let r = t[e];
 		if (!r) {
@@ -497,7 +497,7 @@ function xe(e) {
 		};
 	}, r = (e) => {
 		if (e.owner) {
-			let t = R(e);
+			let t = z(e);
 			t && n(e.owner, t);
 		}
 		for (let t of e.children ?? []) r(t);
@@ -506,14 +506,14 @@ function xe(e) {
 	for (let t of e) r(t);
 	return t;
 }
-function Se(e, t, n, r, i, a) {
+function B(e, t, n, r, i, a) {
 	let o = i - n, s = a - r, c = o * o + s * s, l = c === 0 ? 0 : Math.max(0, Math.min(1, ((e - n) * o + (t - r) * s) / c));
 	return Math.hypot(e - (n + l * o), t - (r + l * s));
 }
-function Ce(e, t, n, r, i) {
+function xe(e, t, n, r, i) {
 	let a = Infinity, o = (e) => {
 		if (e.owner === t) {
-			let t = we(e, n, r, i);
+			let t = Se(e, n, r, i);
 			t < a && (a = t);
 		}
 		for (let t of e.children ?? []) o(t);
@@ -522,7 +522,7 @@ function Ce(e, t, n, r, i) {
 	for (let t of e) o(t);
 	return a;
 }
-function we(e, t, n, r) {
+function Se(e, t, n, r) {
 	switch (e.shapeType) {
 		case "Circle": {
 			let [i, a] = D(e.props.center);
@@ -534,26 +534,26 @@ function we(e, t, n, r) {
 		}
 		case "Line": {
 			let [i, a] = D(e.props.start), [o, s] = D(e.props.end);
-			return Se(t, n, i, a, o, s) - r - T(e.props.strokeWidth) / 2;
+			return B(t, n, i, a, o, s) - r - T(e.props.strokeWidth) / 2;
 		}
 		case "Polygon":
 		case "Polyline": {
 			let i = Array.isArray(e.props.points) ? e.props.points : [], a = Infinity;
 			for (let e = 0; e < i.length; e++) {
 				let r = i[e], o = i[(e + 1) % i.length];
-				a = Math.min(a, Se(t, n, Number(r[0]) || 0, Number(r[1]) || 0, Number(o[0]) || 0, Number(o[1]) || 0));
+				a = Math.min(a, B(t, n, Number(r[0]) || 0, Number(r[1]) || 0, Number(o[0]) || 0, Number(o[1]) || 0));
 			}
-			return e.shapeType === "Polygon" && Te(i, t, n) ? -r : a - r;
+			return e.shapeType === "Polygon" && Ce(i, t, n) ? -r : a - r;
 		}
 		default: {
-			let i = R(e);
+			let i = z(e);
 			if (!i) return Infinity;
 			let a = Math.max(i.x - t, 0, t - (i.x + i.width)), o = Math.max(i.y - n, 0, n - (i.y + i.height));
 			return Math.hypot(a, o) - r;
 		}
 	}
 }
-function Te(e, t, n) {
+function Ce(e, t, n) {
 	let r = !1;
 	for (let i = 0, a = e.length - 1; i < e.length; a = i++) {
 		let o = Number(e[i][0]) || 0, s = Number(e[i][1]) || 0, c = Number(e[a][0]) || 0, l = Number(e[a][1]) || 0;
@@ -562,12 +562,12 @@ function Te(e, t, n) {
 	return r;
 }
 // src/penrose/computed.ts
-var Ee = /* @__PURE__ */ new WeakMap();
-function De(e) {
-	let t = Ee.get(e);
-	return t || (t = xe(e.shapes), Ee.set(e, t)), t;
+var we = /* @__PURE__ */ new WeakMap();
+function Te(e) {
+	let t = we.get(e);
+	return t || (t = be(e.shapes), we.set(e, t)), t;
 }
-function z(e, t) {
+function V(e, t) {
 	let n = e.getCanonical(t, r);
 	if (n) return {
 		...n,
@@ -586,14 +586,14 @@ function z(e, t) {
 		}
 	};
 }
-function Oe(e) {
+function Ee(e) {
 	return {
 		compiled: {
 			id: p.compiled,
 			symbol: `${c}:compile`,
 			dependsOnCanonical: [r],
 			compute(t, n) {
-				let r = z(n, t);
+				let r = V(n, t);
 				if (!r) return;
 				let i = e.error(t, r);
 				if (i) return {
@@ -650,14 +650,14 @@ function Oe(e) {
 			dependsOnCanonical: [r],
 			dependsOnComputed: [p.compiled],
 			compute(t, n) {
-				let r = z(n, t);
+				let r = V(n, t);
 				if (!r) return;
 				let i = e.layout(t, r);
 				if (i) return {
 					digest: i.digest,
 					canvas: i.canvas,
 					owners: i.owners,
-					bounds: De(i),
+					bounds: Te(i),
 					shapes: i.shapes,
 					labels: i.labels,
 					varyingValues: i.varyingValues,
@@ -671,7 +671,7 @@ function Oe(e) {
 		}
 	};
 }
-function ke(e, t, n) {
+function De(e, t, n) {
 	let r = x(n, t), i = n.getComputed(t, p.layout);
 	if (!r || !i) return;
 	let a = i.bounds[e.ownerKey];
@@ -694,7 +694,7 @@ function ke(e, t, n) {
 		rotation: 0
 	};
 }
-function Ae(e, t, n, r, i, a) {
+function Oe(e, t, n, r, i, a) {
 	let o = x(n, t), s = n.getComputed(t, p.layout);
 	if (!o || !s) return Infinity;
 	let c = S(s.canvas, o), l = {
@@ -703,18 +703,18 @@ function Ae(e, t, n, r, i, a) {
 	}, u = {
 		x: l.x - s.canvas.width / 2,
 		y: s.canvas.height / 2 - l.y
-	}, d = 4 / Math.max(a * c.scale, .001), f = Ce(s.shapes, e.ownerKey, u.x, u.y, d);
+	}, d = 4 / Math.max(a * c.scale, .001), f = xe(s.shapes, e.ownerKey, u.x, u.y, d);
 	return f <= 0 ? f : Infinity;
 }
 // src/penrose/aspects.ts
-function je(e, t, n) {
+function ke(e, t, n) {
 	let r = Math.min(520, 24 + n.length * 7.2);
-	return `<g><rect x="${e}" y="${t - 22}" width="${r}" height="22" rx="4" fill="rgba(254,226,226,0.96)" stroke="#dc2626" stroke-width="1"/><text x="${e + 8}" y="${t - 7}" font="12px 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#991b1b">${Me(n)}</text></g>`;
+	return `<g><rect x="${e}" y="${t - 22}" width="${r}" height="22" rx="4" fill="rgba(254,226,226,0.96)" stroke="#dc2626" stroke-width="1"/><text x="${e + 8}" y="${t - 7}" font="12px 'Helvetica Neue', Helvetica, Arial, sans-serif" fill="#991b1b">${Ae(n)}</text></g>`;
 }
-function Me(e) {
+function Ae(e) {
 	return e.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\"", "&quot;");
 }
-function Ne(e) {
+function je(e) {
 	return {
 		id: r,
 		label: "Penrose 스코프",
@@ -755,18 +755,18 @@ function Ne(e) {
 				...r,
 				pending: !0
 			};
-			let o = S(a.canvas, r), s = be(a.shapes, {
+			let o = S(a.canvas, r), s = ye(a.shapes, {
 				canvas: a.canvas,
 				labels: a.labels,
 				idPrefix: t
 			});
 			return {
 				...r,
-				svg: `<g transform="${ne(o)}" data-penrose-scope="${Me(t)}">${s}</g>`
+				svg: `<g transform="${ne(o)}" data-penrose-scope="${Ae(t)}">${s}</g>`
 			};
 		},
 		renderSvg(e, t) {
-			return t ? t.error ? { svg: je(t.x, t.y, `Penrose: ${t.error}`.slice(0, 140)) } : t.pending && !t.svg ? { svg: je(t.x, t.y, "Penrose: 컴파일 중…") } : { svg: t.svg ?? "" } : { svg: "" };
+			return t ? t.error ? { svg: ke(t.x, t.y, `Penrose: ${t.error}`.slice(0, 140)) } : t.pending && !t.svg ? { svg: ke(t.x, t.y, "Penrose: 컴파일 중…") } : { svg: t.svg ?? "" } : { svg: "" };
 		},
 		selection: {
 			priority: 5,
@@ -804,7 +804,7 @@ function Ne(e) {
 		}
 	};
 }
-function Pe() {
+function Me() {
 	let e = (e, t) => t.getComputed(e, p.member);
 	return {
 		id: i,
@@ -824,8 +824,8 @@ function Pe() {
 		dependsOnCanonical: [i, r],
 		dependsOnComputed: [p.layout],
 		derive(e, t, n) {
-			if (!z(n, e.scopeId)) return;
-			let r = ke(e, e.scopeId, n);
+			if (!V(n, e.scopeId)) return;
+			let r = De(e, e.scopeId, n);
 			if (r) return r;
 			let i = x(n, e.scopeId);
 			if (i) return {
@@ -848,7 +848,7 @@ function Pe() {
 			},
 			hitTest(e, t, n, r, a) {
 				let o = t.getCanonical(e, i);
-				return o ? Ae(o, o.scopeId, t, n, r, a) : Infinity;
+				return o ? Oe(o, o.scopeId, t, n, r, a) : Infinity;
 			},
 			intersectsRect(t, n, r, i, a, o) {
 				let s = e(t, n);
@@ -893,39 +893,39 @@ function Pe() {
 	};
 }
 // src/penrose/documents.ts
-var Fe = (e) => `${c}:${e}`;
-function B(e) {
+var Ne = (e) => `${c}:${e}`;
+function H(e) {
 	return e.services.get("canvas.active-tool-surface")?.get();
 }
-function V(e, t) {
+function U(e, t) {
 	try {
 		return e.services.get(t);
 	} catch {
 		return;
 	}
 }
-function Ie(e) {
-	return B(e)?.host.history ?? V(e, "canvas.interaction")?.history;
+function Pe(e) {
+	return H(e)?.host.history ?? U(e, "canvas.interaction")?.history;
 }
-function H(e, t, n) {
+function W(e, t, n) {
 	if (!n.length) return;
-	let r = Ie(e);
+	let r = Pe(e);
 	r?.begin();
 	try {
-		e.world.applyCanonicalTransaction(Fe(t), n, "local:user"), r?.commit();
+		e.world.applyCanonicalTransaction(Ne(t), n, "local:user"), r?.commit();
 	} catch (e) {
 		throw r?.abort(), e;
 	}
 }
-function U(e) {
-	let t = B(e);
-	return t ? [...t.selection.getSelection()] : [...V(e, "canvas.selection")?.getSelection?.() ?? []];
+function Fe(e) {
+	let t = H(e);
+	return t ? [...t.selection.getSelection()] : [...U(e, "canvas.selection")?.getSelection?.() ?? []];
 }
-function Le(e, t) {
-	let n = B(e);
-	n ? n.selection.select(t) : V(e, "canvas.selection")?.select?.(t);
+function Ie(e, t) {
+	let n = H(e);
+	n ? n.selection.select(t) : U(e, "canvas.selection")?.select?.(t);
 }
-function W(e, t) {
+function G(e, t) {
 	let n = e.getCanonical(t, r);
 	if (n) return {
 		schemaVersion: 2,
@@ -940,14 +940,14 @@ function W(e, t) {
 		solverConfig: o(n.solverConfig)
 	};
 }
-function Re(e, t) {
-	for (let n of t ? [t] : U(e)) {
+function Le(e, t) {
+	for (let n of t ? [t] : Fe(e)) {
 		if (e.world.getCanonical(n, "penrose.scope")) return n;
 		let t = e.world.getCanonical(n, i);
 		if (t?.scopeId && e.world.getCanonical(t.scopeId, "penrose.scope")) return t.scopeId;
 	}
 }
-function G(e, t) {
+function K(e, t) {
 	let n = {};
 	for (let r of e.listEntityIds?.() ?? []) {
 		let a = e.getCanonical(r, i);
@@ -957,8 +957,8 @@ function G(e, t) {
 	}
 	return n;
 }
-var ze = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-function Be(e) {
+var Re = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+function ze(e) {
 	let t = "V";
 	for (let n of e.listEntityIds()) {
 		let r = e.getCanonical(n, "core.stacking")?.order;
@@ -966,18 +966,18 @@ function Be(e) {
 	}
 	return t;
 }
-function Ve(e, t) {
+function Be(e, t) {
 	let n = t, r = "";
-	for (let e = 0; e < 3; e++) r = ze[n % 61] + r, n = Math.floor(n / 61);
+	for (let e = 0; e < 3; e++) r = Re[n % 61] + r, n = Math.floor(n / 61);
 	return `${e}${r}`;
 }
-function K(e) {
+function q(e) {
 	return `${e}_${globalThis.crypto?.randomUUID?.().replace(/-/g, "").slice(0, 16) ?? Math.random().toString(36).slice(2, 18)}`;
 }
-function He(e, t, n, r, a) {
+function Ve(e, t, n, r, a) {
 	let o = [], s = {};
 	n.forEach((n, c) => {
-		let l = r[n], u = l ? e.getCanonical(l, i) : void 0, d = u && u.scopeId === t ? l : K(`ent_penrose_${n.replace(/[^\w-]/g, "_")}`);
+		let l = r[n], u = l ? e.getCanonical(l, i) : void 0, d = u && u.scopeId === t ? l : q(`ent_penrose_${n.replace(/[^\w-]/g, "_")}`);
 		s[n] = d, u && u.scopeId === t && u.ownerKey === n || o.push({
 			id: d,
 			aspect: i,
@@ -990,7 +990,7 @@ function He(e, t, n, r, a) {
 		}), e.getCanonical(d, "core.stacking") || o.push({
 			id: d,
 			aspect: "core.stacking",
-			patch: { order: Ve(a, c) }
+			patch: { order: Be(a, c) }
 		});
 	});
 	for (let [n, a] of Object.entries(r)) s[n] !== a && e.isAlive(a) && e.getCanonical(a, "penrose.member")?.scopeId === t && o.push({
@@ -1003,8 +1003,8 @@ function He(e, t, n, r, a) {
 		ops: o
 	};
 }
-function Ue(e) {
-	let t = B(e), n = t?.surface.element ?? V(e, "canvas.surface")?.element, r = t?.host ?? V(e, "canvas.interaction");
+function He(e) {
+	let t = H(e), n = t?.surface.element ?? U(e, "canvas.surface")?.element, r = t?.host ?? U(e, "canvas.interaction");
 	if (!n || !r?.screenToWorld) return {
 		x: 0,
 		y: 0
@@ -1015,20 +1015,20 @@ function Ue(e) {
 	};
 	return r.screenToWorld(i.left + (i.width || 0) / 2, i.top + (i.height || 0) / 2, a), a;
 }
-async function We(e, t = {}) {
-	let { context: n, runtime: i } = e, a = t.source ?? v, o = t.variation ?? "0", s = K("ent_penrose_scope"), { compiled: c, layout: l } = await i.apply(s, a, o), u = l.canvas.width > 1 ? l.canvas : {
+async function Ue(e, t = {}) {
+	let { context: n, runtime: i } = e, a = t.source ?? v, o = t.variation ?? "0", s = q("ent_penrose_scope"), { compiled: c, layout: l } = await i.apply(s, a, o), u = l.canvas.width > 1 ? l.canvas : {
 		width: y.width,
 		height: y.height
 	}, d = t.size ?? {
 		width: Math.round(u.width),
 		height: Math.round(u.height)
-	}, f = t.at ?? Ue(n), p = {
+	}, f = t.at ?? He(n), p = {
 		x: Math.round(f.x - d.width / 2),
 		y: Math.round(f.y - d.height / 2),
 		width: Math.round(d.width),
 		height: Math.round(d.height),
 		rotation: 0
-	}, m = `${Be(n.world)}V`, h = He(n.world, s, c.owners, {}, m), g = {
+	}, m = `${ze(n.world)}V`, h = Ve(n.world, s, c.owners, {}, m), g = {
 		schemaVersion: 2,
 		...a,
 		variation: o,
@@ -1041,7 +1041,7 @@ async function We(e, t = {}) {
 			dragSteps: 2
 		}
 	};
-	return H(n, "insert-scope", [
+	return W(n, "insert-scope", [
 		{
 			id: s,
 			aspect: "core.transform",
@@ -1070,10 +1070,10 @@ async function We(e, t = {}) {
 			patch: g
 		},
 		...h.ops
-	]), Le(n, s), s;
+	]), Ie(n, s), s;
 }
-async function Ge(e, t, n, i = "apply-dsl") {
-	let { context: a, runtime: s } = e, c = a.world, l = W(c, t);
+async function We(e, t, n, i = "apply-dsl") {
+	let { context: a, runtime: s } = e, c = a.world, l = G(c, t);
 	if (!l) throw Error("Penrose 스코프를 찾을 수 없습니다.");
 	if (c.isEntityReadOnly(t)) throw Error("읽기 전용 Penrose 스코프입니다.");
 	let u = {
@@ -1087,9 +1087,9 @@ async function Ge(e, t, n, i = "apply-dsl") {
 	try {
 		let { compiled: e, layout: n } = await s.apply(t, u, d, l.pins), o = {
 			...l.entityBindings,
-			...G(c.getCanonicalView(), t)
-		}, p = c.getCanonical(t, "core.stacking")?.order ?? "V", m = He(c, t, e.owners, o, p);
-		return H(a, i, [...m.ops, {
+			...K(c.getCanonicalView(), t)
+		}, p = c.getCanonical(t, "core.stacking")?.order ?? "V", m = Ve(c, t, e.owners, o, p);
+		return W(a, i, [...m.ops, {
 			id: t,
 			aspect: r,
 			patch: {
@@ -1113,7 +1113,7 @@ async function Ge(e, t, n, i = "apply-dsl") {
 		};
 	} catch (e) {
 		let n = e;
-		H(a, `${i}-error`, [{
+		W(a, `${i}-error`, [{
 			id: t,
 			aspect: r,
 			patch: {
@@ -1127,9 +1127,9 @@ async function Ge(e, t, n, i = "apply-dsl") {
 		throw Object.assign(/* @__PURE__ */ Error(`Penrose DSL 오류${s.length ? `\n${s.join("\n")}` : `: ${n.message ?? "compile failed"}`}`), { diagnostics: o });
 	}
 }
-function Ke(e, t, n) {
-	let { context: i } = e, a = W(i.world, t);
-	a && H(i, "manipulate", [{
+function Ge(e, t, n) {
+	let { context: i } = e, a = G(i.world, t);
+	a && W(i, "manipulate", [{
 		id: t,
 		aspect: r,
 		patch: {
@@ -1138,11 +1138,11 @@ function Ke(e, t, n) {
 		}
 	}]);
 }
-async function qe(e, t) {
-	let { context: n, runtime: i } = e, a = W(n.world, t);
+async function Ke(e, t) {
+	let { context: n, runtime: i } = e, a = G(n.world, t);
 	if (!a) throw Error("Penrose 스코프를 찾을 수 없습니다.");
 	let o = String((Number.parseInt(a.variation, 10) || 0) + 1), { compiled: s, layout: c } = await i.apply(t, a, o, a.pins);
-	return H(n, "resample", [{
+	return W(n, "resample", [{
 		id: t,
 		aspect: r,
 		patch: {
@@ -1161,11 +1161,11 @@ async function qe(e, t) {
 		pending: !1
 	};
 }
-async function Je(e, t) {
-	let { context: n, runtime: i } = e, a = W(n.world, t);
+async function qe(e, t) {
+	let { context: n, runtime: i } = e, a = G(n.world, t);
 	if (!a) throw Error("Penrose 스코프를 찾을 수 없습니다.");
 	let o = await i.converge(t, a, a.pins);
-	return H(n, "reproject", [{
+	return W(n, "reproject", [{
 		id: t,
 		aspect: r,
 		patch: {
@@ -1183,8 +1183,8 @@ async function Je(e, t) {
 		pending: !1
 	};
 }
-function Ye(e, t, n) {
-	let { context: a } = e, o = a.world, s = W(o, t);
+function Je(e, t, n) {
+	let { context: a } = e, o = a.world, s = G(o, t);
 	if (!s) throw Error("Penrose 스코프를 찾을 수 없습니다.");
 	let c = o.getComputed(t, p.compiled), l = o.getComputed(t, p.layout);
 	if (!c || !l) throw Error("Penrose 레이아웃이 아직 준비되지 않았습니다.");
@@ -1205,7 +1205,7 @@ function Ye(e, t, n) {
 		value: l.varyingValues[e] ?? 0
 	}))], g = {
 		...s.entityBindings,
-		...G(o.getCanonicalView(), t)
+		...K(o.getCanonicalView(), t)
 	}[n], _ = [{
 		id: t,
 		aspect: r,
@@ -1215,10 +1215,10 @@ function Ye(e, t, n) {
 		id: g,
 		aspect: i,
 		patch: { pinned: !m }
-	}), H(a, "toggle-pin", _);
+	}), W(a, "toggle-pin", _);
 }
 // src/penrose/bake.ts
-var Xe = (e, t) => e ? `rgba(${Math.round(e[0] * 255)},${Math.round(e[1] * 255)},${Math.round(e[2] * 255)},${Math.round(e[3] * 1e3) / 1e3})` : t, Ze = (e, t) => ({
+var Ye = (e, t) => e ? `rgba(${Math.round(e[0] * 255)},${Math.round(e[1] * 255)},${Math.round(e[2] * 255)},${Math.round(e[3] * 1e3) / 1e3})` : t, Xe = (e, t) => ({
 	x: e,
 	y: t,
 	inX: e,
@@ -1227,8 +1227,8 @@ var Xe = (e, t) => e ? `rgba(${Math.round(e[0] * 255)},${Math.round(e[1] * 255)}
 	outY: t,
 	mirroring: "none"
 });
-function Qe(e, t) {
-	let n = (e, n) => Ze(e, t - n), r = e.props, i = (e) => Array.isArray(e) && e.length >= 2 ? [Number(e[0]) || 0, Number(e[1]) || 0] : [0, 0];
+function Ze(e, t) {
+	let n = (e, n) => Xe(e, t - n), r = e.props, i = (e) => Array.isArray(e) && e.length >= 2 ? [Number(e[0]) || 0, Number(e[1]) || 0] : [0, 0];
 	switch (e.shapeType) {
 		case "Circle": {
 			let [e, t] = i(r.center), a = Math.max(0, Number(r.r) || 0);
@@ -1292,18 +1292,18 @@ function Qe(e, t) {
 		default: return;
 	}
 }
-function $e(e, t) {
+function Qe(e, t) {
 	let { context: n } = e, a = n.world, o = a.getCanonical(t, r), s = a.getComputed(t, p.layout), c = x(a.getCanonicalView(), t);
 	if (!o || !s || !c) throw Error("Penrose 레이아웃이 아직 준비되지 않았습니다.");
 	if (a.isEntityReadOnly(t)) throw Error("읽기 전용 Penrose 스코프입니다.");
 	let l = [], u = 0, d = 0;
 	for (let e of s.shapes) {
-		let t = Qe(e, s.canvas.height);
+		let t = Ze(e, s.canvas.height);
 		if (!t) {
 			d++;
 			continue;
 		}
-		let n = K("ent_vector_penrose"), r = Xe(e.props.fillColor, "none"), i = Xe(e.props.strokeColor, "none");
+		let n = q("ent_vector_penrose"), r = Ye(e.props.fillColor, "none"), i = Ye(e.props.strokeColor, "none");
 		l.push({
 			id: n,
 			aspect: "vector.path",
@@ -1341,7 +1341,7 @@ function $e(e, t) {
 	}
 	if (!u) throw Error("베이킹할 수 있는 도형이 없습니다(Text · Equation · Image · Path · Group은 지원하지 않음).");
 	let f = {
-		...G(a.getCanonicalView(), t),
+		...K(a.getCanonicalView(), t),
 		...o.entityBindings ?? {}
 	};
 	for (let e of Object.values(f)) a.getCanonical(e, "penrose.member")?.scopeId === t && l.push({
@@ -1357,48 +1357,48 @@ function $e(e, t) {
 		id: t,
 		aspect: r,
 		patch: null
-	}), H(n, "bake-to-vector", l), e.runtime.forget(t), {
+	}), W(n, "bake-to-vector", l), e.runtime.forget(t), {
 		created: u,
 		skipped: d
 	};
 }
 // src/penrose/commands.ts
-var et = {
+var $e = {
 	"penrose.panel.tri-editor": "Penrose Tri-DSL",
 	"penrose.panel.diagnostics": "Penrose 진단"
 };
-function tt(e, t) {
+function et(e, t) {
 	let { context: n } = e;
 	for (let e of [
 		"ui.shell",
 		"workspace.layout",
 		"ui.workbench"
 	]) {
-		let r = V(n, e);
+		let r = U(n, e);
 		if (r?.openPanel) try {
 			return r.openPanel(t), !0;
 		} catch {}
 	}
-	let r = et[t] ?? t;
+	let r = $e[t] ?? t;
 	return console.info(`[penrose] '${r}' 패널은 작업 영역 왼쪽 활동 레일에서 열 수 있습니다.`), !1;
 }
-function q(e, t) {
-	let n = Re(e.context, t);
+function J(e, t) {
+	let n = Le(e.context, t);
 	if (!n) throw Error("Penrose 스코프를 선택하세요.");
 	return n;
 }
-function nt(e) {
+function tt(e) {
 	let { context: t } = e;
-	for (let e of U(t)) {
+	for (let e of Fe(t)) {
 		let n = t.world.getCanonical(e, i);
 		if (n?.scopeId && n.ownerKey) return {
 			scopeId: n.scopeId,
 			ownerKey: n.ownerKey
 		};
 	}
-	let n = q(e), r = W(t.world, n), a = Object.values({
+	let n = J(e), r = G(t.world, n), a = Object.values({
 		...r?.entityBindings ?? {},
-		...G(t.world.getCanonicalView(), n)
+		...K(t.world.getCanonicalView(), n)
 	});
 	if (a.length === 1) {
 		let e = t.world.getCanonical(a[0], i);
@@ -1409,7 +1409,7 @@ function nt(e) {
 	}
 	throw Error("멤버를 선택하세요.");
 }
-function rt(e) {
+function nt(e) {
 	let { context: t } = e;
 	return [
 		{
@@ -1418,7 +1418,7 @@ function rt(e) {
 			summary: "예제 trio를 스코프와 멤버로 삽입합니다.",
 			keys: ["p"],
 			shortcutScope: "canvas",
-			run: async () => We(e)
+			run: async () => Ue(e)
 		},
 		{
 			id: g.apply,
@@ -1426,7 +1426,7 @@ function rt(e) {
 			summary: "Domain · Substance · Style을 다시 컴파일하고 수렴시킵니다.",
 			run: async (t) => {
 				let n = t ?? {};
-				return Ge(e, q(e, n.scopeId), {
+				return We(e, J(e, n.scopeId), {
 					...n.domainDsl === void 0 ? {} : { domainDsl: n.domainDsl },
 					...n.substanceDsl === void 0 ? {} : { substanceDsl: n.substanceDsl },
 					...n.styleDsl === void 0 ? {} : { styleDsl: n.styleDsl }
@@ -1437,54 +1437,68 @@ function rt(e) {
 			id: g.reset,
 			title: "예제로 되돌리기",
 			summary: "선택한 스코프의 trio를 기본 예제로 바꿉니다.",
-			run: async () => Ge(e, q(e), v, "reset-example")
+			run: async () => We(e, J(e), v, "reset-example")
 		},
 		{
 			id: g.reproject,
 			title: "다시 수렴",
 			summary: "현재 입력에서 최적화를 다시 돌립니다.",
-			run: async () => Je(e, q(e))
+			run: async () => qe(e, J(e))
 		},
 		{
 			id: g.resample,
 			title: "변이 재표본",
 			summary: "variation 시드를 올려 초기 배치를 다시 뽑습니다.",
-			run: async () => qe(e, q(e))
+			run: async () => Ke(e, J(e))
 		},
 		{
 			id: g.pin,
 			title: "핀 고정 / 해제",
 			summary: "선택한 멤버의 최적화 입력을 고정하거나 풉니다.",
 			run: () => {
-				let { scopeId: t, ownerKey: n } = nt(e);
-				Ye(e, t, n);
+				let { scopeId: t, ownerKey: n } = tt(e);
+				Je(e, t, n);
 			}
 		},
 		{
 			id: g.bake,
 			title: "벡터로 베이킹",
 			summary: "수렴한 도형을 vector.path로 바꾸고 스코프를 제거합니다.",
-			run: () => $e(e, q(e))
+			run: () => Qe(e, J(e))
 		},
 		{
 			id: g.openEditor,
 			title: "Tri-DSL 편집기",
 			summary: "Domain · Substance · Style 탭 편집기를 엽니다.",
-			run: () => tt(e, f.triEditor)
+			run: () => et(e, f.triEditor)
 		},
 		{
 			id: g.openDiagnostics,
 			title: "Penrose 진단",
 			summary: "에너지, 단계, 경고와 수렴 입력을 보여 줍니다.",
 			run: () => {
-				let n = Re(t);
-				n && Le(t, n), tt(e, f.diagnostics);
+				let n = Le(t);
+				n && Ie(t, n), et(e, f.diagnostics);
 			}
 		}
 	];
 }
 // src/penrose/manipulate.ts
-var it = 45, at = class {
+var rt = 45;
+function it(e) {
+	let t = [];
+	e.center && t.push(e.center[0], e.center[1]), e.start && t.push(e.start[0], e.start[1]), e.end && t.push(e.end[0], e.end[1]);
+	for (let n of e.points ?? []) t.push(n[0], n[1]);
+	for (let n of [
+		e.r,
+		e.rx,
+		e.ry,
+		e.width,
+		e.height
+	]) n !== void 0 && t.push(n);
+	return t;
+}
+var at = class {
 	host;
 	disposeHandles = [];
 	listeners = [];
@@ -1498,7 +1512,7 @@ var it = 45, at = class {
 		let r = t.services.get("canvas.active-tool-surface");
 		r && this.listeners.push(r.subscribe(() => {
 			this.surface = r.get(), this.rebuild();
-		})), this.surface = B(t), this.rebuild();
+		})), this.surface = H(t), this.rebuild();
 	}
 	dispose() {
 		this.cancel();
@@ -1508,35 +1522,33 @@ var it = 45, at = class {
 	clearHandles() {
 		for (let e of this.disposeHandles.splice(0)) e();
 	}
-	activeScope() {
+	scopes() {
 		let { context: e } = this.host;
-		for (let t of U(e)) {
-			if (e.world.getCanonical(t, "penrose.scope")) return t;
-			let n = e.world.getCanonical(t, i);
-			if (n?.scopeId && e.world.getCanonical(n.scopeId, "penrose.scope")) return n.scopeId;
-		}
+		return e.world.listEntityIds().filter((t) => e.world.getCanonical(t, "penrose.scope")).sort();
 	}
 	refresh() {
-		let { context: e } = this.host, t = this.activeScope(), n = t ? e.world.getComputed(t, p.layout) : void 0, r = n?.varyingValues ?? [], i = 0;
-		for (let e = 0; e < r.length; e += 7) i = (i * 31 + r[e]) % 1000003;
-		let a = U(e).slice().sort().join(","), o = `${t ?? ""}:${a}:${n?.digest ?? ""}:${r.length}:${i}`;
-		o !== this.lastKey && (this.lastKey = o, this.rebuild());
+		let { context: e } = this.host, t = "";
+		for (let n of this.scopes()) {
+			let r = e.world.getComputed(n, p.layout), i = r?.varyingValues ?? [], a = 0;
+			for (let e = 0; e < i.length; e += 7) a = (a * 31 + i[e]) % 1000003;
+			t += `${n}:${r?.digest ?? ""}:${i.length}:${a};`;
+		}
+		t !== this.lastKey && (this.lastKey = t, this.rebuild());
 	}
 	rebuild() {
 		if (this.session) return;
 		this.clearHandles();
-		let { context: e } = this.host, t = this.activeScope();
+		let { context: e } = this.host, t = this.surface ?? H(e);
 		if (!t) return;
-		let n = W(e.world, t), r = e.world.getComputed(t, p.compiled), a = e.world.getComputed(t, p.layout), o = x(e.world.getCanonicalView(), t), s = this.surface ?? B(e);
-		if (!n || !r || !a || !o || !s) return;
-		let c = S(a.canvas, o), l = s.selection.gizmos, u = /* @__PURE__ */ new Set();
-		for (let n of U(e)) {
-			let r = e.world.getCanonical(n, i);
-			r?.scopeId === t && r.ownerKey && u.add(r.ownerKey);
+		let n = t.selection.gizmos;
+		for (let t of this.scopes()) {
+			if (e.world.isEntityReadOnly(t)) continue;
+			let r = G(e.world, t), i = e.world.getComputed(t, p.compiled), a = e.world.getComputed(t, p.layout), o = x(e.world.getCanonicalView(), t);
+			if (!r || !i || !a || !o) continue;
+			let s = S(a.canvas, o), c = new Set(r.pins.map((e) => e.index)), l = new Set(i.interactivity.translatable.map((e) => e.path)), u = new Set(i.interactivity.scalable.map((e) => e.path)), d = /* @__PURE__ */ new Map();
+			for (let e of [...i.interactivity.translatable, ...i.interactivity.scalable]) d.set(e.path, e);
+			for (let e of d.values()) e.owner && (it(e).some((e) => c.has(e)) || (l.has(e.path) && this.addHandle(t, s, e, "move", a.varyingValues, n), u.has(e.path) && this.addHandle(t, s, e, "scale", a.varyingValues, n)));
 		}
-		let d = new Set(r.interactivity.translatable.map((e) => e.path)), f = new Set(r.interactivity.scalable.map((e) => e.path)), m = /* @__PURE__ */ new Map();
-		for (let e of [...r.interactivity.translatable, ...r.interactivity.scalable]) m.set(e.path, e);
-		for (let e of m.values()) e.owner && (!u.size || u.has(e.owner)) && (d.has(e.path) && this.addHandle(t, c, e, "move", a.varyingValues, l), f.has(e.path) && this.addHandle(t, c, e, "scale", a.varyingValues, l));
 	}
 	canvasPoint(e, t) {
 		let n = (e) => t[e] ?? 0;
@@ -1573,7 +1585,7 @@ var it = 45, at = class {
 			y: o.y + s.y
 		}, l = a.register({
 			id: `penrose:${e}:${r}:${n.path}`,
-			priority: it,
+			priority: rt,
 			shape: "circle",
 			radiusScreenPx: r === "move" ? 5 : 6,
 			getWorldPosition: (e) => {
@@ -1581,7 +1593,7 @@ var it = 45, at = class {
 				return e.x = n.x, e.y = n.y, !0;
 			},
 			onPointerDown: (i) => {
-				let a = this.surface ?? B(this.host.context);
+				let a = this.surface ?? H(this.host.context);
 				return a ? (i.preventDefault(), this.begin(e, t, n, r, i, a), !0) : !1;
 			}
 		});
@@ -1647,7 +1659,7 @@ var it = 45, at = class {
 			this.session === l && (u(t), l.ending = !0, (async () => {
 				l.inflight && await l.inflight;
 				let t = await this.host.runtime.drag(e, l.last, 0);
-				this.session === l && (Ke(this.host, e, t.varyingValues), this.session = void 0, this.host.runtime.dragging = !1, _(), o.world.invalidateComputed?.(), this.rebuild());
+				this.session === l && (Ge(this.host, e, t.varyingValues), this.session = void 0, this.host.runtime.dragging = !1, _(), o.world.invalidateComputed?.(), this.rebuild());
 			})());
 		}, f = () => {
 			if (this.session !== l) return;
@@ -1700,7 +1712,7 @@ var it = 45, at = class {
 		if (this.session !== e || e.inflight) return;
 		let t = e.last;
 		e.inflight = (async () => {
-			let n = W(this.host.context.world, e.target.scopeId), r = n ? o(n.solverConfig).dragSteps : 2;
+			let n = G(this.host.context.world, e.target.scopeId), r = n ? o(n.solverConfig).dragSteps : 2;
 			try {
 				await this.host.runtime.drag(e.target.scopeId, t, r);
 			} catch (e) {
@@ -1716,19 +1728,19 @@ var it = 45, at = class {
 			this.host.context.world.invalidateComputed?.(), this.rebuild();
 		});
 	}
-}, ot = "12px/1.45 'Helvetica Neue', Helvetica, Arial, sans-serif";
-function J(e, t = "", n) {
+}, Y = "12px/1.45 'Helvetica Neue', Helvetica, Arial, sans-serif";
+function X(e, t = "", n) {
 	let r = document.createElement(e);
 	return t && r.setAttribute("style", t), n !== void 0 && (r.textContent = n), r;
 }
-function st(e) {
+function ot(e) {
 	for (let t of e.getSelectedIds()) {
 		if (e.world.getCanonical(t, "penrose.scope")) return t;
 		let n = e.world.getCanonical(t, i);
 		if (n?.scopeId && e.world.getCanonical(n.scopeId, "penrose.scope")) return n.scopeId;
 	}
 }
-function Y(e, t) {
+function Z(e, t) {
 	let n = e.world.getCanonical(t, r);
 	if (n) return {
 		...n,
@@ -1737,7 +1749,7 @@ function Y(e, t) {
 		styleDsl: String(n.styleDsl ?? "")
 	};
 }
-var X = { paths: [
+var st = { paths: [
 	"M3 4h14v12H3z",
 	"M6 8h8",
 	"M6 11h5"
@@ -1746,24 +1758,24 @@ function ct() {
 	return {
 		panelId: f.triEditor,
 		title: "Penrose Tri-DSL",
-		icon: X,
+		icon: st,
 		defaultZone: "right",
 		navigation: {
 			group: "document",
 			order: 60
 		},
 		mount(e, t) {
-			e.setAttribute("style", `display:flex;flex-direction:column;gap:6px;padding:8px;font:${ot};min-width:320px;height:100%;box-sizing:border-box`);
-			let n = J("div", "display:flex;align-items:center;gap:6px"), r = J("strong", "flex:1;font-size:12px", "Penrose 스코프"), a = J("button", "padding:3px 10px;font:inherit;cursor:pointer", "적용 (⌘↵)");
+			e.setAttribute("style", `display:flex;flex-direction:column;gap:6px;padding:8px;font:${Y};min-width:320px;height:100%;box-sizing:border-box`);
+			let n = X("div", "display:flex;align-items:center;gap:6px"), r = X("strong", "flex:1;font-size:12px", "Penrose 스코프"), a = X("button", "padding:3px 10px;font:inherit;cursor:pointer", "적용 (⌘↵)");
 			n.append(r, a);
-			let o = J("div", "display:flex;gap:4px"), s = J("div", "color:#b91c1c;white-space:pre-wrap;max-height:110px;overflow:auto"), c = [], l = [
+			let o = X("div", "display:flex;gap:4px"), s = X("div", "color:#b91c1c;white-space:pre-wrap;max-height:110px;overflow:auto"), c = [], l = [
 				"Domain",
 				"Substance",
 				"Style"
-			], u = 0, d, f = J("textarea", "flex:1;min-height:180px;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;padding:6px;border:1px solid #cbd5e1;border-radius:4px;resize:none;box-sizing:border-box");
+			], u = 0, d, f = X("textarea", "flex:1;min-height:180px;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;padding:6px;border:1px solid #cbd5e1;border-radius:4px;resize:none;box-sizing:border-box");
 			c.push(f);
 			let m = l.map((e, t) => {
-				let n = J("button", "padding:2px 8px;font:inherit;cursor:pointer", e);
+				let n = X("button", "padding:2px 8px;font:inherit;cursor:pointer", e);
 				return n.addEventListener("click", () => {
 					u = t, h();
 				}), o.appendChild(n), n;
@@ -1772,7 +1784,7 @@ function ct() {
 					f.value = "", f.disabled = !0, a.disabled = !0;
 					return;
 				}
-				let e = Y(t, d);
+				let e = Z(t, d);
 				if (!e) {
 					f.value = "", f.disabled = !0, a.disabled = !0;
 					return;
@@ -1787,7 +1799,7 @@ function ct() {
 				s.textContent = r && !r.ok && !r.pending ? r.diagnostics.length ? r.diagnostics.map((e) => `${e.source} L${e.line}: ${e.message}`).join("\n") : r.error ?? "" : "";
 			}, _ = () => {
 				if (!d) return;
-				let e = Y(t, d);
+				let e = Z(t, d);
 				if (!e) return;
 				let n = [
 					e.domainDsl,
@@ -1831,20 +1843,20 @@ function lt() {
 	return {
 		panelId: f.diagnostics,
 		title: "Penrose 진단",
-		icon: X,
+		icon: st,
 		defaultZone: "right",
 		navigation: {
 			group: "document",
 			order: 61
 		},
 		mount(e, t) {
-			e.setAttribute("style", `padding:8px;font:${ot};min-width:280px;height:100%;box-sizing:border-box;overflow:auto`);
-			let n = J("div", "display:flex;gap:6px;margin-bottom:8px"), r = J("button", "padding:2px 8px;font:inherit;cursor:pointer", "재표본"), i = J("button", "padding:2px 8px;font:inherit;cursor:pointer", "다시 수렴");
+			e.setAttribute("style", `padding:8px;font:${Y};min-width:280px;height:100%;box-sizing:border-box;overflow:auto`);
+			let n = X("div", "display:flex;gap:6px;margin-bottom:8px"), r = X("button", "padding:2px 8px;font:inherit;cursor:pointer", "재표본"), i = X("button", "padding:2px 8px;font:inherit;cursor:pointer", "다시 수렴");
 			n.append(r, i);
-			let a = J("div", "white-space:pre-wrap");
+			let a = X("div", "white-space:pre-wrap");
 			e.append(n, a);
 			let o = (e) => async () => {
-				let n = st(t);
+				let n = ot(t);
 				if (n) try {
 					await t.executeCommand(e, { scopeId: n });
 				} catch (e) {
@@ -1857,12 +1869,12 @@ function lt() {
 				o(g.reproject)();
 			});
 			let s = () => {
-				let e = st(t);
+				let e = ot(t);
 				if (!e) {
 					a.textContent = "스코프를 선택하세요.";
 					return;
 				}
-				let n = Y(t, e), r = t.world.getComputed(e, p.compiled), i = t.world.getComputed(e, p.layout), o = [];
+				let n = Z(t, e), r = t.world.getComputed(e, p.compiled), i = t.world.getComputed(e, p.layout), o = [];
 				if (o.push(`digest: ${n?.topologyDigest || "—"}`), o.push(`variation: ${n?.variation ?? "—"}`), r?.pending ? o.push("상태: 컴파일 중") : r && !r.ok ? o.push(`상태: 오류 — ${r.error ?? "DSL 오류"}`) : o.push("상태: 준비됨"), r) {
 					o.push(`owners: ${r.owners.length} · inputs: ${r.varyingValues.length}`), o.push(`translatable: ${r.interactivity.translatable.length} · scalable: ${r.interactivity.scalable.length}`);
 					for (let e of r.diagnostics.slice(0, 8)) o.push(`  ${e.source} L${e.line}: ${e.message}`);
@@ -1982,10 +1994,10 @@ function ft() {
 	return typeof e == "function" ? e() : new dt();
 }
 // src/penrose/runtime.ts
-var Z = (e) => {
+var Q = (e) => {
 	e.invalidateComputed?.();
 };
-function Q(e) {
+function $(e) {
 	return e.filter((e) => Number.isInteger(e.index) && e.index >= 0 && Number.isFinite(e.value)).map((e) => ({
 		index: e.index,
 		value: e.value
@@ -2025,12 +2037,12 @@ var pt = class {
 		};
 		this.engine.compile(e, s).then((t) => {
 			if (n.digest === r) return n.compiled = t, this.engine.layout(e).then((e) => {
-				n.digest === r && (n.layout = e, n.status = "ready", Z(this.world));
+				n.digest === r && (n.layout = e, n.status = "ready", Q(this.world));
 			});
 		}).catch((e) => {
 			if (n.digest !== r) return;
 			let t = e;
-			n.status = "error", n.error = t.message ?? String(e), n.diagnostics = t.diagnostics ?? t.penroseDiagnostics, Z(this.world);
+			n.status = "error", n.error = t.message ?? String(e), n.diagnostics = t.diagnostics ?? t.penroseDiagnostics, Q(this.world);
 		});
 	}
 	compiled(e, t) {
@@ -2053,7 +2065,7 @@ var pt = class {
 			n.digest === r && (n.layout = e, n.compiled &&= {
 				...n.compiled,
 				varyingValues: e.varyingValues
-			}, Z(this.world));
+			}, Q(this.world));
 		}).catch(() => void 0).finally(() => this.syncing.delete(e));
 	}
 	error(e, t) {
@@ -2071,7 +2083,7 @@ var pt = class {
 			substance: t.substanceDsl,
 			style: t.styleDsl,
 			variation: n
-		}), o = await this.engine.layout(e), c = Q(r);
+		}), o = await this.engine.layout(e), c = $(r);
 		return c.length && (o = await this.engine.drag(e, c, 0)), this.entries.set(e, {
 			digest: i,
 			status: "ready",
@@ -2087,7 +2099,7 @@ var pt = class {
 		};
 	}
 	async converge(e, t, n = []) {
-		let r = this.digest(t), i = await this.engine.converge(e, o(t.solverConfig).maxSteps), a = Q(n), s = await this.engine.layout(e);
+		let r = this.digest(t), i = await this.engine.converge(e, o(t.solverConfig).maxSteps), a = $(n), s = await this.engine.layout(e);
 		a.length && (s = await this.engine.drag(e, a, 0));
 		let c = {
 			...i,
@@ -2102,7 +2114,7 @@ var pt = class {
 		}), c;
 	}
 	async resample(e, t, n = []) {
-		let r = this.digest(t), i = await this.engine.resample(e), a = Q(n), o = await this.engine.layout(e);
+		let r = this.digest(t), i = await this.engine.resample(e), a = $(n), o = await this.engine.layout(e);
 		a.length && (o = await this.engine.drag(e, a, 0));
 		let s = {
 			...i,
@@ -2148,13 +2160,13 @@ var pt = class {
 	placement: "tool-shelf",
 	commandSymbol: g.insert,
 	requiresSelection: !1
-}], $ = [ct(), lt()], ht = {
+}], ht = [ct(), lt()], gt = {
 	..._(),
 	summary: u,
-	aspects: [Ne($), Pe()],
+	aspects: [je(ht), Me()],
 	ui: {
 		controls: mt,
-		panels: $
+		panels: ht
 	},
 	activate(e) {
 		let t = !0, r = [], i = new pt(e.world), a = {
@@ -2163,9 +2175,9 @@ var pt = class {
 		}, o = (t) => {
 			let n = e.world.registerComputed?.(t);
 			n && r.push(n);
-		}, s = Oe(i);
+		}, s = Ee(i);
 		o(s.compiled), o(s.layout);
-		for (let t of rt(a)) r.push(e.commands.register(t));
+		for (let t of nt(a)) r.push(e.commands.register(t));
 		let c = new at(a);
 		r.push(() => c.dispose());
 		let u = () => {
@@ -2174,7 +2186,7 @@ var pt = class {
 			version: l,
 			coreVersion: n,
 			aspectIds: d,
-			insertScope: () => (u(), We(a)),
+			insertScope: () => (u(), Ue(a)),
 			compiled: (t) => (u(), e.world.getComputed(t, p.compiled)),
 			layout: (t) => (u(), e.world.getComputed(t, p.layout)),
 			diagnose: (t) => {
@@ -2208,4 +2220,4 @@ var pt = class {
 		};
 	}
 };
-export { ht as default };
+export { gt as default };

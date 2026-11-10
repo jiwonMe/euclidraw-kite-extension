@@ -44,6 +44,8 @@ export interface Host {
   selection: () => string[]; select(ids: string[]): void;
   pointer(type: string, x: number, y: number, init?: PointerEventInit): PointerEvent;
   press(x: number, y: number, init?: PointerEventInit): boolean;
+  hitTest(x: number, y: number): boolean;
+  gizmoHandles(): { id: string; x: number; y: number }[];
   completions: { prompt: string; labels: string[] }[];
   answer: (prompt: string, labels: string[]) => unknown;
   run<T = unknown>(command: string, args?: unknown): Promise<T>;
@@ -135,6 +137,17 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
       Object.defineProperty(event, 'pointerId', { value: 1 });
       surface.dispatchEvent(event);
       return event;
+    },
+    hitTest(x, y) {
+      const hit = { id: '', priority: 0, distanceScreenPx: 0 };
+      return gizmos.hitTest(x, y, identity, hit);
+    },
+    gizmoHandles() {
+      return ((gizmos as Any).handles ?? []).map((handle: Any) => {
+        const point = { x: 0, y: 0 };
+        handle.getWorldPosition(point);
+        return { id: handle.id, x: point.x, y: point.y };
+      });
     },
     press(x, y, init = {}) {
       const hit = { id: '', priority: 0, distanceScreenPx: 0 };

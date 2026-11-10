@@ -1,9 +1,9 @@
 import type { CanvasToolSurface, CanvasToolSurfaceProvider, EntityId } from '../host.ts';
 import { type CompiledScope, type SolvedLayout } from './computed.ts';
 import { COMPUTED } from '../manifest.ts';
-import { commitDrag, readScope, selectedIds, surfaceOf, type PenroseHost } from './documents.ts';
+import { commitDrag, readScope, surfaceOf, type PenroseHost } from './documents.ts';
 import { frameFor, readScopeBox, toCanvas, type Frame } from './frame.ts';
-import { MEMBER_ASPECT, readSolverConfig, type PenroseMemberAspect } from './schema.ts';
+import { readSolverConfig } from './schema.ts';
 import type { WireInputs } from './wire.ts';
 
 interface HandleTarget {
@@ -23,6 +23,17 @@ interface DragSession {
 }
 
 const HANDLE_PRIORITY = 45;
+
+/** Every optimization input index of one style path, matching runtime order. */
+function indexesOf(input: WireInputs): number[] {
+  const out: number[] = [];
+  if (input.center) out.push(input.center[0], input.center[1]);
+  if (input.start) out.push(input.start[0], input.start[1]);
+  if (input.end) out.push(input.end[0], input.end[1]);
+  for (const point of input.points ?? []) out.push(point[0], point[1]);
+  for (const index of [input.r, input.rx, input.ry, input.width, input.height]) if (index !== undefined) out.push(index);
+  return out;
+}
 
 /**
  * Free-degree gizmos. Handles exist only for properties Penrose reports as
@@ -59,26 +70,25 @@ export class PenroseManipulator {
     for (const off of this.disposeHandles.splice(0)) off();
   }
 
-  private activeScope(): EntityId | undefined {
+  private scopes(): EntityId[] {
     const { context } = this.host;
-    for (const id of selectedIds(context)) {
-      if (context.world.getCanonical(id, 'penrose.scope')) return id;
-      const member = context.world.getCanonical<PenroseMemberAspect>(id, MEMBER_ASPECT);
-      if (member?.scopeId && context.world.getCanonical(member.scopeId, 'penrose.scope')) return member.scopeId;
-    }
-    return undefined;
+    return context.world
+      .listEntityIds()
+      .filter(id => context.world.getCanonical(id, 'penrose.scope'))
+      .sort();
   }
 
-  /** Rebuild when the selection or the rendered layout changed. */
+  /** Rebuild when any rendered layout changed (selection does not gate handles). */
   private refresh(): void {
     const { context } = this.host;
-    const scopeId = this.activeScope();
-    const layout = scopeId ? context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout) : undefined;
-    const values = layout?.varyingValues ?? [];
-    let checksum = 0;
-    for (let index = 0; index < values.length; index += 7) checksum = (checksum * 31 + values[index]!) % 1_000_003;
-    const selection = selectedIds(context).slice().sort().join(',');
-    const key = `${scopeId ?? ''}:${selection}:${layout?.digest ?? ''}:${values.length}:${checksum}`;
+    let key = '';
+    for (const scopeId of this.scopes()) {
+      const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
+      const values = layout?.varyingValues ?? [];
+      let checksum = 0;
+      for (let index = 0; index < values.length; index += 7) checksum = (checksum * 31 + values[index]!) % 1_000_003;
+      key += `${scopeId}:${layout?.digest ?? ''}:${values.length}:${checksum};`;
+    }
     if (key !== this.lastKey) { this.lastKey = key; this.rebuild(); }
   }
 
@@ -86,30 +96,29 @@ export class PenroseManipulator {
     if (this.session) return;
     this.clearHandles();
     const { context } = this.host;
-    const scopeId = this.activeScope();
-    if (!scopeId) return;
-    const scope = readScope(context.world, scopeId);
-    const compiled = context.world.getComputed<CompiledScope>(scopeId, COMPUTED.compiled);
-    const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
-    const box = readScopeBox(context.world.getCanonicalView(), scopeId);
     const surface = this.surface ?? surfaceOf(context);
-    if (!scope || !compiled || !layout || !box || !surface) return;
-    const frame = frameFor(layout.canvas, box);
+    if (!surface) return;
     const registry = surface.selection.gizmos;
-    const selectedOwners = new Set<string>();
-    for (const id of selectedIds(context)) {
-      const member = context.world.getCanonical<PenroseMemberAspect>(id, MEMBER_ASPECT);
-      if (member?.scopeId === scopeId && member.ownerKey) selectedOwners.add(member.ownerKey);
-    }
-    const translatable = new Set(compiled.interactivity.translatable.map(input => input.path));
-    const scalable = new Set(compiled.interactivity.scalable.map(input => input.path));
-    const inputs = new Map<string, WireInputs>();
-    for (const input of [...compiled.interactivity.translatable, ...compiled.interactivity.scalable]) inputs.set(input.path, input);
-    for (const input of inputs.values()) {
-      if (!input.owner) continue;
-      if (selectedOwners.size && !selectedOwners.has(input.owner)) continue;
-      if (translatable.has(input.path)) this.addHandle(scopeId, frame, input, 'move', layout.varyingValues, registry);
-      if (scalable.has(input.path)) this.addHandle(scopeId, frame, input, 'scale', layout.varyingValues, registry);
+    for (const scopeId of this.scopes()) {
+      if (context.world.isEntityReadOnly(scopeId)) continue;
+      const scope = readScope(context.world, scopeId);
+      const compiled = context.world.getComputed<CompiledScope>(scopeId, COMPUTED.compiled);
+      const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
+      const box = readScopeBox(context.world.getCanonicalView(), scopeId);
+      if (!scope || !compiled || !layout || !box) continue;
+      const frame = frameFor(layout.canvas, box);
+      const pinned = new Set(scope.pins.map(pin => pin.index));
+      const translatable = new Set(compiled.interactivity.translatable.map(input => input.path));
+      const scalable = new Set(compiled.interactivity.scalable.map(input => input.path));
+      const inputs = new Map<string, WireInputs>();
+      for (const input of [...compiled.interactivity.translatable, ...compiled.interactivity.scalable]) inputs.set(input.path, input);
+      for (const input of inputs.values()) {
+        if (!input.owner) continue;
+        // Pinned inputs are not free: no handle until the pin is released.
+        if (indexesOf(input).some(index => pinned.has(index))) continue;
+        if (translatable.has(input.path)) this.addHandle(scopeId, frame, input, 'move', layout.varyingValues, registry);
+        if (scalable.has(input.path)) this.addHandle(scopeId, frame, input, 'scale', layout.varyingValues, registry);
+      }
     }
   }
 

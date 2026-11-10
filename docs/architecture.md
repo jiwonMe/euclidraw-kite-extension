@@ -72,7 +72,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 
 ## 6. 조작
 
-- 핸들은 `state.interactivityInfo`가 보고한 **최적화 입력**에만 생깁니다. 식으로 계산된 속성에는 자유도가 없습니다.
+- 핸들은 `state.interactivityInfo`가 보고한 **자유 최적화 입력**에 항상 생깁니다(선택과 무관). 핀이 걸린 입력, 읽기 전용 스코프, 식으로 계산된 속성에는 없습니다.
 - 이동 핸들은 `center`/`start`/`end`/`points` 입력을, 크기 핸들은 `r`/`rx`/`ry`/`width`/`height`를 움직입니다.
 - 드래그 중에는 포인터 목표만 기록하고, 프레임마다 워커에 절대 입력값을 보냅니다.
 - 워커는 `stepTimes(dragSteps)` 후 끈 입력을 목표값으로 되돌립니다(재핀). 주변 도형은 근사 최적화 상태입니다.
