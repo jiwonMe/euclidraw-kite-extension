@@ -278,6 +278,9 @@ function renderText(shape: WireShape, canvas: WireCanvas): string {
 
 function sanitizeSvg(markup: string): string {
   return markup
+    // Older documents stored MathJax's `<mjx-container>` wrapper; only the
+    // inner `<svg>` paints inside an SVG scene.
+    .replace(/<\s*\/?\s*mjx-container\b[^>]*>/gi, '')
     .replace(/<\s*(script|foreignObject|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
     .replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*\/?>/gi, '')
     .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
@@ -297,7 +300,10 @@ function renderEquation(shape: WireShape, options: RenderOptions): string {
     const content = escapeXml(str(shape.props.string));
     return `<text x="${round(x)}" y="${round(y + h / 2 - num(shape.props.descent))}" text-anchor="middle"${fillAttrs(shape)}${passthrough(shape)}>${content}</text>`;
   }
-  return `<g transform="${transform}"${fillAttrs(shape)}>${sanitizeSvg(markup)}</g>`;
+  // MathJax paints its glyphs with `currentColor`, so the CSS `color` property
+  // is what actually colours an Equation (fill alone would be ignored).
+  const color = isColor(shape.props.fillColor) ? ` color="${paint(shape.props.fillColor)}"` : '';
+  return `<g transform="${transform}"${color}${fillAttrs(shape)}${passthrough(shape)}>${sanitizeSvg(markup)}</g>`;
 }
 
 function renderImage(shape: WireShape, canvas: WireCanvas): string {

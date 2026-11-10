@@ -493,10 +493,14 @@ export class PenroseManipulator {
     session.ticker = setInterval(() => {
       if (this.session !== session || !session.raw || session.ending) return;
       const moved = !session.sent || Math.hypot(session.raw.x - session.sent.x, session.raw.y - session.sent.y) > 0.02;
-      if (!moved) return;
-      session.sent = { ...session.raw };
-      if (session.target.kind === 'computed') session.preview = { ...session.raw };
-      else session.last = this.targetsFor(session, session.raw);
+      if (moved) {
+        session.sent = { ...session.raw };
+        if (session.target.kind === 'computed') session.preview = { ...session.raw };
+        else session.last = this.targetsFor(session, session.raw);
+      }
+      // Keep converging even while the pointer holds still: the optimizer needs
+      // several bounded frames to move neighbours aside, and only reacting to
+      // pointer deltas left the dropped shape overlapping them.
       void this.flush(session);
     }, 16);
   }

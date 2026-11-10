@@ -400,7 +400,11 @@ function equationLabel(source: string, fontSize: string): { dims: LabelDims; svg
     };
     if (node.kind === 'error' || node.attributes?.['data-mjx-error']) return undefined;
     const markup = adaptor.outerHTML(node as never);
-    const viewBox = /viewBox="([^"]+)"/.exec(markup);
+    // MathJax wraps the drawing in a custom `<mjx-container>` element, which is
+    // not SVG: injecting it into the scene does not paint anything. Keep only
+    // the inner `<svg>` (that is also what Penrose's own renderer clones).
+    const svgMarkup = /<svg\b[\s\S]*<\/svg>/.exec(markup)?.[0] ?? markup;
+    const viewBox = /viewBox="([^"]+)"/.exec(svgMarkup);
     if (!viewBox) return undefined;
     const parts = viewBox[1]!.trim().split(/\s+/).map(Number);
     const widthEm = (parts[2] ?? 0) / 1000;
@@ -408,7 +412,7 @@ function equationLabel(source: string, fontSize: string): { dims: LabelDims; svg
     const size = parseFontSize(fontSize, 16);
     const height = heightEm * size;
     const width = widthEm * size;
-    const svg = markup
+    const svg = svgMarkup
       .replace(/\swidth="[^"]*"/, ` width="${width}"`)
       .replace(/\sheight="[^"]*"/, ` height="${height}"`)
       .replace(/\sstyle="[^"]*"/, '');
@@ -683,7 +687,7 @@ export function dragPointSession(
   const handle = session.computed.find(entry => entry.id === handleId);
   if (!handle) return layoutOf(session);
   const beforeLabels = labelSnapshot(session.state);
-  const beforeEnergy = evalEnergy(session.state);
+  const beforeEnergy = dragEnergy(session.state, session.state.varyingValues);
   let state = session.state;
   for (let round = 0; round < 2; round++) {
     let shapes: Map<string, AnyShape>;
@@ -717,7 +721,7 @@ export function dragPointSession(
     }
   } catch { /* keep the converged state */ }
   followLabels(state, beforeLabels, state);
-  if (evalEnergy(state) > beforeEnergy * 8 + 1e6) state = session.state;
+  if (exploded(beforeEnergy, evalEnergy(state))) state = dragStageOf(session.state);
   session.state = state;
   return layoutOf(session);
 }
@@ -891,6 +895,35 @@ function settleForDrag(input: PenroseState, steps: number, budgetMs = 0): Penros
   return stepped.isOk() ? stepped.value : { ...state, params };
 }
 
+/**
+ * Energy of the drag-stage problem for these values. The guard must compare
+ * energies under the *same* masks and weight as the frame it is judging:
+ * comparing the last (arrow) stage against the union drag stage made every
+ * frame look like an explosion once the earlier geometry stage was included,
+ * so projected handles never moved at all.
+ */
+function dragEnergy(state: PenroseState, values: readonly number[]): number {
+  try {
+    return evalEnergy(dragStageOf({ ...state, varyingValues: [...values] }));
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Reject a drag frame that let one optimizer step wreck the layout.
+ *
+ * The threshold has to allow the ordinary penalty a drag creates. A diagram
+ * whose constraints are all satisfied and that has no objective terms has an
+ * energy of exactly 0, so a purely relative test (`before * 8 + 1e6`) rejects
+ * the very first pointer step and a projected handle never moves at all. Use an
+ * absolute floor in that case; it still catches runaway steps (1e12 and up).
+ */
+function exploded(before: number, after: number): boolean {
+  if (!Number.isFinite(after)) return true;
+  return after > (before > 0 ? before * 8 + 1e6 : 1e9);
+}
+
 /** Drag: move the given input indexes to absolute targets, converge, then re-pin. */
 export function dragSession(
   session: CoreSession,
@@ -899,13 +932,13 @@ export function dragSession(
   budgetMs = 0,
 ): WireLayout {
   const beforeLabels = labelSnapshot(session.state);
-  const beforeEnergy = evalEnergy(session.state);
   const values = [...session.state.varyingValues];
   for (const target of targets) {
     if (target.index >= 0 && target.index < values.length) values[target.index] = target.value;
   }
+  const beforeEnergy = dragEnergy(session.state, values);
   const deadline = performance.now() + Math.max(0, budgetMs);
-  let state: PenroseState = { ...session.state, varyingValues: values };
+  let state: PenroseState = dragStageOf({ ...session.state, varyingValues: values });
   // Alternate converge and re-pin: pinning after a converged step leaves the
   // rest of the diagram at the pre-pin solution, so run a second round inside
   // the same frame budget.
@@ -922,12 +955,14 @@ export function dragSession(
   followLabels(state, beforeLabels, state);
   // Never let one frame explode the diagram; keep the dragged input at the
   // pointer and let the next frame try again.
-  if (evalEnergy(state) > beforeEnergy * 8 + 1e6) {
+  if (exploded(beforeEnergy, evalEnergy(state))) {
     const safeValues = [...session.state.varyingValues];
     for (const target of targets) {
       if (target.index >= 0 && target.index < safeValues.length) safeValues[target.index] = target.value;
     }
-    state = { ...session.state, varyingValues: safeValues };
+    // Stay on the drag stage: flipping back to the arrow stage every frame
+    // would re-add the union stage and re-apply the same failing comparison.
+    state = dragStageOf({ ...session.state, varyingValues: safeValues });
     followLabels(state, beforeLabels, state);
   }
   session.state = state;
@@ -952,11 +987,20 @@ export function polishSession(session: CoreSession, options: PolishOptions = {})
   const { maxSteps = 4000, budgetMs = 0, pins = [] } = options;
   const beforeLabels = labelSnapshot(session.state);
   const state = session.state;
-  const beforeEnergy = evalEnergy(state);
+  // Seed the pass with the drag targets. Pinning only *after* stepping left the
+  // neighbours at their old place and then teleported the dragged shape onto
+  // them, so the release could not separate it; the optimizer has to start
+  // from the drop position with the target already fixed.
+  const pinValues = (source: readonly number[]): number[] => {
+    const values = [...source];
+    for (const pin of pins) if (pin.index >= 0 && pin.index < values.length) values[pin.index] = pin.value;
+    return values;
+  };
   // Stay on the drag stage: it is the union of the geometry and arrow stages,
   // so the release pass hardens `disjoint` without re-running abandoned stages.
   const restarted: PenroseState = {
     ...state,
+    varyingValues: pinValues(state.varyingValues),
     params: {
       ...start(state.varyingValues.length),
       weight: Math.min(state.params.weight, 1e8),
@@ -973,16 +1017,12 @@ export function polishSession(session: CoreSession, options: PolishOptions = {})
     const stepped = stepTimes(restarted, maxSteps);
     if (stepped.isOk()) polished = stepped.value;
   }
-  if (pins.length) {
-    const values = [...polished.varyingValues];
-    for (const pin of pins) if (pin.index >= 0 && pin.index < values.length) values[pin.index] = pin.value;
-    polished = { ...polished, varyingValues: values };
-  }
-  // A polish pass must never make the diagram worse; otherwise keep the drag
-  // preview as-is instead of jumping on release.
+  if (pins.length) polished = { ...polished, varyingValues: pinValues(polished.varyingValues) };
+  // A polish pass must never make the diagram worse than its seeded start;
+  // otherwise keep that start instead of jumping on release.
   const afterEnergy = evalEnergy(polished);
-  if (afterEnergy > beforeEnergy + 1e-6) {
-    polished = state;
+  if (afterEnergy > evalEnergy(restarted) + 1e-6) {
+    polished = restarted;
   } else {
     followLabels(polished, beforeLabels, polished);
   }
