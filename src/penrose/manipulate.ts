@@ -4,7 +4,7 @@ import { COMPUTED } from '../manifest.ts';
 import { commitDrag, readScope, selectedIds, surfaceOf, type PenroseHost } from './documents.ts';
 import { frameFor, readScopeBox, toCanvas, type Frame } from './frame.ts';
 import { MEMBER_ASPECT, readSolverConfig, type PenroseMemberAspect } from './schema.ts';
-import type { WireInputs } from './wire.ts';
+import type { WireInputs, WireShape } from './wire.ts';
 
 interface HandleTarget {
   readonly scopeId: EntityId;
@@ -58,6 +58,21 @@ function indexesOf(input: WireInputs): number[] {
 }
 
 const round = (value: number): number => Math.round(value * 100) / 100;
+
+/** Props, children and clips all finite: a degenerate style can emit NaN. */
+function shapesFinite(shapes: readonly WireShape[]): boolean {
+  const finite = (value: unknown): boolean => {
+    if (typeof value === 'number') return Number.isFinite(value);
+    if (Array.isArray(value)) return value.every(finite);
+    return true;
+  };
+  for (const shape of shapes) {
+    if (!Object.values(shape.props).every(finite)) return false;
+    if (shape.children && !shapesFinite(shape.children)) return false;
+    if (shape.clip && !shapesFinite(shape.clip)) return false;
+  }
+  return true;
+}
 
 /**
  * Free-degree gizmos. Handles exist only for properties Penrose reports as
@@ -157,18 +172,26 @@ export class PenroseManipulator {
       const scalable = new Set(compiled.interactivity.scalable.map(input => input.path));
       const inputs = new Map<string, WireInputs>();
       for (const input of [...compiled.interactivity.translatable, ...compiled.interactivity.scalable]) inputs.set(input.path, input);
+      const directPoints: { x: number; y: number }[] = [];
       for (const input of inputs.values()) {
         if (!input.owner) continue;
         if (!showAll && !owners?.has(input.owner)) continue;
         // Pinned inputs are not free: no handle until the pin is released.
         if (indexesOf(input).some(index => pinned.has(index))) continue;
-        if (translatable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'move', layout.varyingValues, registry);
+        if (translatable.has(input.path)) {
+          this.addHandle(scopeId, layout.canvas, input, 'move', layout.varyingValues, registry);
+          const point = this.canvasPoint(input, layout.varyingValues);
+          if (point) directPoints.push(point);
+        }
         if (scalable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'scale', layout.varyingValues, registry);
       }
       // Projected points: not direct inputs, but movable through their free
       // inputs. The worker owns the Jacobian; the main thread only drags.
       for (const handle of layout.computed) {
         if (!showAll && !(handle.owner && owners?.has(handle.owner))) continue;
+        // A direct input already has a handle at this point; a projected handle
+        // stacked on top of it would only win hit-testing and behave worse.
+        if (directPoints.some(point => Math.hypot(point.x - handle.x, point.y - handle.y) < 0.5)) continue;
         this.addComputedHandle(scopeId, layout.canvas, handle, registry);
       }
     }
@@ -515,6 +538,19 @@ export class PenroseManipulator {
         }
         if (this.session !== session) return;
         commitDrag(this.host, scopeId, values);
+        // A degenerate frame can leave the cached layout non-finite (a style
+        // dividing by a zero length). Recompile from the committed inputs so
+        // the document does not stay broken.
+        const rendered = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
+        if (rendered && !shapesFinite(rendered.shapes)) {
+          const scope = readScope(context.world, scopeId);
+          if (scope) {
+            void this.host.runtime.converge(scopeId, scope).then(() => {
+              (context.world as { invalidateComputed?(): void }).invalidateComputed?.();
+              this.rebuild();
+            }).catch(error => console.error('[penrose] layout recovery failed', error));
+          }
+        }
         this.session = undefined;
         this.host.runtime.dragging = false;
         cleanup();

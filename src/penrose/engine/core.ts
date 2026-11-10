@@ -200,8 +200,10 @@ function ownerMap(state: PenroseState): Map<string, string> {
 
 type PointField = 'center' | 'start' | 'end' | 'points';
 
-// The ray-tracing example needs ~130 inputs; the Jacobian for 126 inputs over
-// 26 candidates takes ~7 ms, so this bound is generous but still finite.
+// The Jacobian costs one `computeShapes` per free input (~0.2 ms). Beyond a
+// couple of hundred inputs a drag frame can also drive a style to a degenerate
+// configuration (e.g. `unit(a - b)` with a == b), so keep the projected-handle
+// machinery to diagrams where a single frame stays well-conditioned.
 const MAX_COMPUTED_INPUTS = 200;
 const MAX_COMPUTED_HANDLES = 160;
 
@@ -300,6 +302,10 @@ function candidatesOf(shapes: readonly AnyShape[], owners: Map<string, string>):
           for (let index = 0; index < points.length; index++) add(shape, 'points', index, 3);
           break;
         }
+        case 'Text':
+        case 'Equation':
+          add(shape, 'center', 0, 1);
+          break;
         case 'Group':
           visit(groupChildren(shape));
           break;
@@ -372,7 +378,7 @@ function buildComputedHandles(session: CoreSession): ComputedHandle[] {
   let complete = true;
   for (let k = 0; k < free.length; k++) {
     // Bound cold-open work: partial Jacobians would make handles misleading.
-    if (performance.now() - started > 250) { complete = false; break; }
+    if (performance.now() - started > 600) { complete = false; break; }
     const index = free[k]!;
     const epsilon = 1e-4 * Math.max(1, Math.abs(working[index] ?? 0));
     working[index] = (baseValues[index] ?? 0) + epsilon;
@@ -753,7 +759,7 @@ export function dragPointSession(
     }
   } catch { /* keep the converged state */ }
   followLabels(state, beforeLabels, state);
-  if (exploded(beforeEnergy, evalEnergy(state))) state = dragStageOf(session.state);
+  if (hasNonFinite(state.varyingValues) || !shapesAreFinite(state) || exploded(beforeEnergy, evalEnergy(state))) state = dragStageOf(session.state);
   session.state = state;
   return layoutOf(session);
 }
@@ -900,6 +906,28 @@ function realStageIndex(state: PenroseState): number {
  * restart the optimizer (keeping the warm-start values and penalty weight) or
  * every frame after the first would skip convergence.
  */
+/** A single bad optimizer step must never write NaN into the document. */
+function hasNonFinite(values: readonly number[]): boolean {
+  for (const value of values) if (!Number.isFinite(value)) return true;
+  return false;
+}
+
+/**
+ * Some styles divide by a length (`unit(a - b)`), so a degenerate drag makes
+ * the shape graph NaN even though every free input stays finite. Sample the
+ * computed points before accepting a frame.
+ */
+function shapesAreFinite(state: PenroseState): boolean {
+  try {
+    for (const candidate of candidatesOf(state.computeShapes(state.varyingValues) as unknown as AnyShape[], new Map())) {
+      if (!Number.isFinite(candidate.x) || !Number.isFinite(candidate.y)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function settleForDrag(input: PenroseState, steps: number, budgetMs = 0): PenroseState {
   const state = dragStageOf(input);
   // The drag stage now carries the hard geometry constraints, so it needs a
@@ -916,13 +944,15 @@ function settleForDrag(input: PenroseState, steps: number, budgetMs = 0): Penros
     const started = performance.now();
     try {
       const stepped = step({ ...state, params }, { until: () => performance.now() - started >= budgetMs });
-      return stepped.isOk() ? stepped.value : { ...state, params };
+      const next = stepped.isOk() && !hasNonFinite(stepped.value.varyingValues) && shapesAreFinite(stepped.value) ? stepped.value : undefined;
+      return next ?? { ...state, params };
     } catch {
       return { ...state, params };
     }
   }
   const stepped = stepTimes({ ...state, params }, steps);
-  return stepped.isOk() ? stepped.value : { ...state, params };
+  const next = stepped.isOk() && !hasNonFinite(stepped.value.varyingValues) && shapesAreFinite(stepped.value) ? stepped.value : undefined;
+  return next ?? { ...state, params };
 }
 
 /**
@@ -985,7 +1015,7 @@ export function dragSession(
   followLabels(state, beforeLabels, state);
   // Never let one frame explode the diagram; keep the dragged input at the
   // pointer and let the next frame try again.
-  if (exploded(beforeEnergy, evalEnergy(state))) {
+  if (hasNonFinite(state.varyingValues) || !shapesAreFinite(state) || exploded(beforeEnergy, evalEnergy(state))) {
     const safeValues = [...session.state.varyingValues];
     for (const target of targets) {
       if (target.index >= 0 && target.index < safeValues.length) safeValues[target.index] = target.value;
@@ -1051,7 +1081,7 @@ export function polishSession(session: CoreSession, options: PolishOptions = {})
   // A polish pass must never make the diagram worse than its seeded start;
   // otherwise keep that start instead of jumping on release.
   const afterEnergy = evalEnergy(polished);
-  if (afterEnergy > evalEnergy(restarted) + 1e-6) {
+  if (hasNonFinite(polished.varyingValues) || !shapesAreFinite(polished) || afterEnergy > evalEnergy(restarted) + 1e-6) {
     polished = restarted;
   } else {
     followLabels(polished, beforeLabels, polished);
