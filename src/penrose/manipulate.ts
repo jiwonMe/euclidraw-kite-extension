@@ -22,12 +22,9 @@ interface DragSession {
   preview?: { x: number; y: number };
   inflight?: Promise<void>;
   ending: boolean;
-  /** Raw pointer target and the eased target actually sent to the worker. */
+  /** Latest pointer target and the target last sent to the worker. */
   raw?: { x: number; y: number };
-  smooth?: { x: number; y: number };
   sent?: { x: number; y: number };
-  releasing: boolean;
-  releasedAt: number;
   ticker?: ReturnType<typeof setInterval>;
   finalizing: boolean;
 }
@@ -397,10 +394,7 @@ export class PenroseManipulator {
       last: [],
       ending: false,
       raw: { ...startCanvas },
-      smooth: { ...startCanvas },
       sent: { ...startCanvas },
-      releasing: false,
-      releasedAt: 0,
       finalizing: false,
     };
     this.session = session;
@@ -417,9 +411,8 @@ export class PenroseManipulator {
       const world = { x: 0, y: 0 };
       surface.host.screenToWorld(up.clientX, up.clientY, world);
       session.raw = this.canvasOfWorld(frame, world);
-      session.releasing = true;
-      session.releasedAt = performance.now();
       session.ending = true;
+      void finalize();
     };
     const finalize = async () => {
         if (session.finalizing) return;
@@ -449,12 +442,8 @@ export class PenroseManipulator {
             const snapped = await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0, 0);
             values = snapped.varyingValues;
           }
-          // Ease the release re-layout instead of snapping to the new solution.
-          if (values !== result.varyingValues) {
-            session.last = [];
-            session.preview = undefined;
-            await this.host.runtime.animate(scopeId, result.varyingValues, values, 200);
-          }
+          session.last = [];
+          session.preview = undefined;
         } catch (error) {
           console.error('[penrose] post-drag polish failed', error);
         }
@@ -499,29 +488,16 @@ export class PenroseManipulator {
     window.addEventListener('blur', onBlur);
     window.addEventListener('compositionstart', onComposition);
 
-    // Ease the pointer target (ease-in at press, ease-out on release) instead
-    // of feeding raw pointer jumps to the optimizer.
-    const EASE_MS = 55;
-    let lastTick = performance.now();
+    // Coalesce pointer events into frames. The target is the pointer itself:
+    // no smoothing, so the shape tracks the cursor 1:1.
     session.ticker = setInterval(() => {
-      if (this.session !== session || !session.raw || !session.smooth) return;
-      const now = performance.now();
-      const dt = Math.min(32, Math.max(1, now - lastTick));
-      lastTick = now;
-      const alpha = 1 - Math.exp(-dt / EASE_MS);
-      session.smooth = {
-        x: session.smooth.x + (session.raw.x - session.smooth.x) * alpha,
-        y: session.smooth.y + (session.raw.y - session.smooth.y) * alpha,
-      };
-      const moved = !session.sent || Math.hypot(session.smooth.x - session.sent.x, session.smooth.y - session.sent.y) > 0.02;
-      if (moved) {
-        session.sent = { ...session.smooth };
-        if (session.target.kind === 'computed') session.preview = { ...session.smooth };
-        else session.last = this.targetsFor(session, session.smooth);
-        void this.flush(session);
-      }
-      const remaining = Math.hypot(session.raw.x - session.smooth.x, session.raw.y - session.smooth.y);
-      if (session.releasing && (remaining < 0.5 || now - session.releasedAt > 320)) void finalize();
+      if (this.session !== session || !session.raw || session.ending) return;
+      const moved = !session.sent || Math.hypot(session.raw.x - session.sent.x, session.raw.y - session.sent.y) > 0.02;
+      if (!moved) return;
+      session.sent = { ...session.raw };
+      if (session.target.kind === 'computed') session.preview = { ...session.raw };
+      else session.last = this.targetsFor(session, session.raw);
+      void this.flush(session);
     }, 16);
   }
 
