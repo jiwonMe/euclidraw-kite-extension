@@ -86,6 +86,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 이동 핸들은 `center`/`start`/`end`/`points` 입력을, 크기 핸들은 `r`/`rx`/`ry`/`width`/`height`를 움직입니다.
 - 드래그 중에는 포인터 목표만 기록하고, 프레임마다 워커에 절대 입력값을 보냅니다.
 - 워커는 매 프레임 optimizer 상태를 **재시작**합니다. 수렴 후 `optStatus === 'EPConverged'`이면 `step`이 no-op이므로, 값을 직접 바꾼 드래그에서는 이전 상태를 그대로 쓰면 첫 프레임만 수렴합니다. `start(n)`으로 파라미터를 새로 만들고 warm-start 값은 유지합니다.
+- 스테이지 최적화의 `text` 단계는 마지막 전체 패스 시점의 점 위치를 상수로 들고 있어, 드래그로 점을 직접 옮기면 AutoLabel/`Label` 텍스트가 제자리에 남습니다. 그래서 매 프레임 소유자 앵커의 이동량만큼 레이블 중심을 함께 평행이동합니다(드래그 프리뷰 전용). 놓을 때의 전체 수렴이 실제 제약으로 다시 배치합니다.
 - 드래그 중 penalty weight는 **1e8로 상한**을 둡니다. EP가 1e9까지 올린 weight를 그대로 쓰면 L-BFGS의 preconditioned 수렴 검사가 스텝 전에 멈춰 AutoLabel이 얼어붙습니다. 1e8은 AutoLabel이 계속 움직이는 가장 높은 값이며(1e9에서 정지), 1e5 대비 거리 제약 잔차가 약 2.3px에서 0.65px로 줄었습니다. 예산 안에서 수렴·재핀을 3회 교대합니다.
 - 예산(`solverConfig.dragBudgetMs`, 기본 10ms) 안에서 **수렴 → 끈 입력 재핀**을 두 번 교대합니다. 한 번만 하면 재핀 직후 제약 잔차가 남기 때문입니다. 예산이 0이면 `dragSteps` 고정 스텝을 씁니다.
 - 투영 핸들은 IK 2회 후 **최종 정확 보정**으로 끈 점을 포인터에 정확히 맞춥니다(제약은 다음 프레임에 다시 수렴).

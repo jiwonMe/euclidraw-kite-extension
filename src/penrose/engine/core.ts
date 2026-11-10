@@ -682,6 +682,7 @@ export function dragPointSession(
 ): WireLayout {
   const handle = session.computed.find(entry => entry.id === handleId);
   if (!handle) return layoutOf(session);
+  const beforeLabels = labelSnapshot(session.state);
   let state = session.state;
   for (let round = 0; round < 2; round++) {
     let shapes: Map<string, AnyShape>;
@@ -714,8 +715,94 @@ export function dragPointSession(
       state = { ...state, varyingValues: values };
     }
   } catch { /* keep the converged state */ }
+  followLabels(state, beforeLabels, state);
   session.state = state;
   return layoutOf(session);
+}
+
+interface LabelSnapshot {
+  readonly anchors: Map<string, { x: number; y: number }>;
+  readonly labels: readonly { name: string; owner: string; indexes: [number, number]; x: number; y: number }[];
+}
+
+/**
+ * Labels are positioned by the text stage, whose compiled objectives hold the
+ * dot positions from the last full stage pass. Dragging only the current stage
+ * therefore leaves labels stale. Snapshot owner anchors and translate labels
+ * with their owner during the preview; the release polish re-places them under
+ * the real constraints.
+ */
+function labelSnapshot(state: PenroseState): LabelSnapshot {
+  const owners = ownerMap(state);
+  const sums = new Map<string, { x: number; y: number; count: number }>();
+  const labels: { name: string; owner: string; indexes: [number, number]; x: number; y: number }[] = [];
+  const byPath = state.interactivityInfo.inputIdxsByPath;
+  const walk = (list: readonly AnyShape[]) => {
+    for (const shape of list) {
+      const name = shape.name?.contents ?? '';
+      const owner = owners.get(name);
+      if (Array.isArray(shape.shapes)) {
+        for (const entry of shape.shapes as AnyValue[]) if (Array.isArray(entry.contents)) walk(entry.contents as AnyShape[]);
+      }
+      if (!owner) continue;
+      const type = shape.shapeType;
+      if (type === 'Text' || type === 'Equation') {
+        const entry = byPath.get(`${name}.center`) as { tag?: string; contents?: unknown } | undefined;
+        const inner = entry?.tag === 'Val' ? (entry.contents as { tag?: string; contents?: unknown }) : entry;
+        const value = inner?.tag === 'VectorV' && Array.isArray(inner.contents) ? (inner.contents as number[]) : undefined;
+        if (value && typeof value[0] === 'number' && typeof value[1] === 'number') {
+          labels.push({ name, owner, indexes: [value[0], value[1]], x: state.varyingValues[value[0]] ?? 0, y: state.varyingValues[value[1]] ?? 0 });
+        }
+        continue;
+      }
+      const point = (() => {
+        if (type === 'Circle' || type === 'Ellipse' || type === 'Rectangle' || type === 'Image') return pointOf(shape, 'center', 0);
+        if (type === 'Line') {
+          const a = pointOf(shape, 'start', 0), b = pointOf(shape, 'end', 0);
+          return a && b ? ([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as [number, number]) : undefined;
+        }
+        if (type === 'Polygon' || type === 'Polyline') {
+          const points = (shape.points as { contents?: number[][] } | undefined)?.contents ?? [];
+          if (!points.length) return undefined;
+          let sx = 0, sy = 0;
+          for (const p of points) { sx += Number(p[0]) || 0; sy += Number(p[1]) || 0; }
+          return [sx / points.length, sy / points.length] as [number, number];
+        }
+        return undefined;
+      })();
+      if (!point) continue;
+      const sum = sums.get(owner) ?? { x: 0, y: 0, count: 0 };
+      sum.x += point[0]; sum.y += point[1]; sum.count += 1;
+      sums.set(owner, sum);
+    }
+  };
+  let computedShapes: AnyShape[] = [];
+  try { computedShapes = state.computeShapes(state.varyingValues) as unknown as AnyShape[]; } catch { /* keep empty */ }
+  walk(computedShapes);
+  const anchors = new Map<string, { x: number; y: number }>();
+  for (const [owner, sum] of sums) anchors.set(owner, { x: sum.x / sum.count, y: sum.y / sum.count });
+  return { anchors, labels };
+}
+
+/** Translate label centres by the movement of their owner's anchor. */
+function followLabels(state: PenroseState, before: LabelSnapshot, afterState: PenroseState): void {
+  const after = labelSnapshot(afterState);
+  const deltas = new Map<string, { dx: number; dy: number }>();
+  for (const [owner, anchor] of after.anchors) {
+    const start = before.anchors.get(owner);
+    if (!start) continue;
+    const dx = anchor.x - start.x, dy = anchor.y - start.y;
+    if (Math.hypot(dx, dy) > 1e-6) deltas.set(owner, { dx, dy });
+  }
+  if (!deltas.size) return;
+  const values = [...state.varyingValues];
+  for (const label of before.labels) {
+    const delta = deltas.get(label.owner);
+    if (!delta) continue;
+    values[label.indexes[0]] = label.x + delta.dx;
+    values[label.indexes[1]] = label.y + delta.dy;
+  }
+  state.varyingValues = values;
 }
 
 /**
@@ -754,6 +841,7 @@ export function dragSession(
   steps: number,
   budgetMs = 0,
 ): WireLayout {
+  const beforeLabels = labelSnapshot(session.state);
   const values = [...session.state.varyingValues];
   for (const target of targets) {
     if (target.index >= 0 && target.index < values.length) values[target.index] = target.value;
@@ -773,6 +861,7 @@ export function dragSession(
     }
     state = { ...state, varyingValues: pinned };
   }
+  followLabels(state, beforeLabels, state);
   session.state = state;
   return layoutOf(session);
 }

@@ -98,4 +98,39 @@ suite('per-frame drag convergence', () => {
     host.pointer('pointerup', handle.x + 40, handle.y);
     await new Promise(resolve => setTimeout(resolve, 120));
   });
+
+  it('keeps explicit Label text attached to its dot during the drag', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    await host.run('penrose.studio:apply-dsl', {
+      scopeId,
+      domainDsl: fixture('graph.domain'),
+      substanceDsl: fixture('graph.substance'),
+      styleDsl: fixture('graph.style'),
+    });
+    await settle(host);
+    host.select([scopeId]);
+    host.paint();
+    const dot = (owner: string) => {
+      const shape = layout(host!, scopeId).shapes.find((entry: { owner?: string; shapeType: string }) => entry.owner === owner && entry.shapeType === 'Circle');
+      const [x, y] = (shape as { props: { center: number[] } }).props.center;
+      return { x: x!, y: y! };
+    };
+    const beforeLabel = label(host, scopeId, 'LA');
+    const beforeDot = dot('LA');
+    const handle = host.gizmoHandles().find(entry => entry.id.includes(':move:`LA`.dot'))!;
+    expect(host.press(handle.x, handle.y)).toBe(true);
+    for (let step = 1; step <= 3; step++) {
+      host.pointer('pointermove', handle.x + step * 12, handle.y);
+      await new Promise(resolve => setTimeout(resolve, 70));
+    }
+    host.paint();
+    const afterLabel = label(host, scopeId, 'LA');
+    const afterDot = dot('LA');
+    expect(Math.abs((afterLabel.x - beforeLabel.x) - (afterDot.x - beforeDot.x))).toBeLessThan(1);
+    expect(Math.abs((afterLabel.y - beforeLabel.y) - (afterDot.y - beforeDot.y))).toBeLessThan(1);
+    host.pointer('pointerup', handle.x + 36, handle.y);
+    await new Promise(resolve => setTimeout(resolve, 300));
+  });
 });
