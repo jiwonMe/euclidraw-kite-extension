@@ -69,6 +69,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 화살촉은 `<marker>` 대신 경로로 직접 그립니다(같은 arrowhead 정의, `markerUnits=strokeWidth` 스케일).
 - Group 클립은 스코프별 유일 ID의 `<clipPath>`입니다.
 - Equation은 사전 렌더된 MathJax SVG를 정화해 삽입합니다.
+- Group의 멤버는 배열이 아니라 `ShapeListV` 값(`shape.shapes.contents`)에 들어 있고, `clipPath`는 `ClipDataV`(`NoClip | Clip`)이며 `clip(x)`는 도형 **하나**를 담습니다. `Array.isArray(shape.shapes)`로 검사하면 그룹 내용이 통째로 사라지므로(구현 초기 버그) 항상 `contents`를 풀어 읽습니다. 그룹 안의 도형도 소유자·라벨·투영 핸들 수집 대상입니다.
 - Image는 `data:` URI만 허용하고, 인라인 SVG는 script·이벤트 속성을 제거합니다. 상대 경로 `href`(예: Penrose 예제의 `ball-shading.svg`)는 문서에 파일 컨텍스트가 없어 해석하지 못하므로 그려지지 않습니다.
 - Equation은 MathJax가 만든 그림을 인라인 `<svg>`로 넣습니다. MathJax는 `<mjx-container>`(비 SVG 커스텀 엘리먼트)로 감싸는데, 이것을 그대로 장면에 넣으면 아무것도 칠해지지 않으므로 내부 `<svg>`만 남깁니다. 글리프는 `fill="currentColor"`로 칠해지므로 도형의 `fillColor`를 CSS `color`로도 전달합니다.
 - 패스스루 속성은 허용 목록으로 거르고 모든 문자열을 이스케이프합니다.

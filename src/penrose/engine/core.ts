@@ -131,16 +131,13 @@ function toWireShape(shape: AnyShape, owners: Map<string, string>): WireShape {
       if (encoded !== null) passthrough[key] = encoded;
     }
   }
-  const children = Array.isArray(shape.shapes)
-    ? (shape.shapes as AnyValue[]).flatMap(entry => {
-        const list = entry.contents;
-        return Array.isArray(list) ? (list as AnyShape[]).map(child => toWireShape(child, owners)) : [];
-      })
-    : undefined;
+  const kids = groupChildren(shape);
+  const children = kids.length ? kids.map(child => toWireShape(child, owners)) : undefined;
+  // `ClipDataV.contents` is `NoClip | Clip`, and a `Clip` holds one shape
+  // (`clip(a)`), not a list.
   const clipEntry = shape.clipPath as { contents?: { tag?: string; contents?: unknown } } | undefined;
-  const clip = clipEntry?.contents?.tag === 'Clip' && Array.isArray(clipEntry.contents.contents)
-    ? (clipEntry.contents.contents as AnyShape[]).map(child => toWireShape(child, owners))
-    : undefined;
+  const clipShape = clipEntry?.contents?.tag === 'Clip' ? (clipEntry.contents.contents as AnyShape | undefined) : undefined;
+  const clip = clipShape ? [toWireShape(clipShape, owners)] : undefined;
   const name = shape.name?.contents ?? '';
   const owner = ownerOf(shape.path);
   return {
@@ -152,6 +149,16 @@ function toWireShape(shape: AnyShape, owners: Map<string, string>): WireShape {
     ...(children && children.length ? { children } : {}),
     ...(clip && clip.length ? { clip } : {}),
   };
+}
+
+/**
+ * Penrose stores a Group's members in a `ShapeListV` value
+ * (`shape.shapes.contents`), not in a plain array, so any `Array.isArray`
+ * check silently drops every child and the group renders empty.
+ */
+function groupChildren(shape: AnyShape): AnyShape[] {
+  const list = (shape.shapes as { contents?: unknown } | undefined)?.contents;
+  return Array.isArray(list) ? (list as AnyShape[]) : [];
 }
 
 function ownerOf(path: unknown): string | undefined {
@@ -171,11 +178,7 @@ function ownerOf(path: unknown): string | undefined {
 function flattenShapes(shapes: readonly AnyShape[], out: AnyShape[] = []): AnyShape[] {
   for (const shape of shapes) {
     out.push(shape);
-    if (Array.isArray(shape.shapes)) {
-      for (const entry of shape.shapes as AnyValue[]) {
-        if (Array.isArray(entry.contents)) flattenShapes(entry.contents as AnyShape[], out);
-      }
-    }
+    flattenShapes(groupChildren(shape), out);
   }
   return out;
 }
@@ -202,11 +205,7 @@ function shapesByName(shapes: readonly AnyShape[], out = new Map<string, AnyShap
   for (const shape of shapes) {
     const name = shape.name?.contents;
     if (name) out.set(name, shape);
-    if (Array.isArray(shape.shapes)) {
-      for (const entry of shape.shapes as AnyValue[]) {
-        if (Array.isArray(entry.contents)) shapesByName(entry.contents as AnyShape[], out);
-      }
-    }
+    shapesByName(groupChildren(shape), out);
   }
   return out;
 }
@@ -269,11 +268,7 @@ function candidatesOf(shapes: readonly AnyShape[], owners: Map<string, string>):
           break;
         }
         case 'Group':
-          if (Array.isArray(shape.shapes)) {
-            for (const entry of shape.shapes as AnyValue[]) {
-              if (Array.isArray(entry.contents)) visit(entry.contents as AnyShape[]);
-            }
-          }
+          visit(groupChildren(shape));
           break;
         default:
           break;
@@ -454,11 +449,7 @@ function collectLabelDims(state: PenroseState): { cache: Map<string, unknown>; s
           rendered: {},
         });
       }
-      if (Array.isArray(shape.shapes)) {
-        for (const entry of shape.shapes as AnyValue[]) {
-          if (Array.isArray(entry.contents)) visit(entry.contents as AnyShape[]);
-        }
-      }
+      visit(groupChildren(shape));
     }
   };
   visit(state.shapes as unknown as AnyShape[]);
@@ -747,9 +738,7 @@ function labelSnapshot(state: PenroseState): LabelSnapshot {
     for (const shape of list) {
       const name = shape.name?.contents ?? '';
       const owner = owners.get(name);
-      if (Array.isArray(shape.shapes)) {
-        for (const entry of shape.shapes as AnyValue[]) if (Array.isArray(entry.contents)) walk(entry.contents as AnyShape[]);
-      }
+      walk(groupChildren(shape));
       if (!owner) continue;
       const type = shape.shapeType;
       if (type === 'Text' || type === 'Equation') {
