@@ -1563,7 +1563,7 @@ var ct = (e) => Math.round(e * 100) / 100, lt = class {
 				if (e.world.isEntityReadOnly(t)) continue;
 				let i = r.has(t), o = a.get(t);
 				if (!i && !o?.size) continue;
-				let s = W(e.world, t), c = e.world.getComputed(t, p.compiled), l = e.world.getComputed(t, p.layout), u = x(e.world.getCanonicalView(), t);
+				let s = W(e.world, t), c = e.world.getComputed(t, p.compiled), l = e.world.getComputed(t, p.layout), u = x(this.previewView(), t);
 				if (!s || !c || !l || !u) continue;
 				let d = new Set(s.pins.map((e) => e.index)), f = new Set(c.interactivity.translatable.map((e) => e.path)), m = new Set(c.interactivity.scalable.map((e) => e.path)), h = /* @__PURE__ */ new Map();
 				for (let e of [...c.interactivity.translatable, ...c.interactivity.scalable]) h.set(e.path, e);
@@ -1596,6 +1596,10 @@ var ct = (e) => Math.round(e * 100) / 100, lt = class {
 			};
 		}
 	}
+	previewView() {
+		let { context: e } = this.host;
+		return e.world.getPreviewView?.() ?? e.world.getCanonicalView();
+	}
 	liveValues(e) {
 		return this.host.context.world.getComputed(e, p.layout)?.varyingValues;
 	}
@@ -1610,7 +1614,7 @@ var ct = (e) => Math.round(e * 100) / 100, lt = class {
 		};
 	}
 	liveFrame(e) {
-		let { context: t } = this.host, n = t.world.getComputed(e, p.layout), r = x(t.world.getCanonicalView(), e);
+		let { context: t } = this.host, n = t.world.getComputed(e, p.layout), r = x(this.previewView(), e);
 		return n && r ? S(n.canvas, r) : void 0;
 	}
 	addHandle(e, t, n, r, i, a) {

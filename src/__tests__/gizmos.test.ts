@@ -93,6 +93,27 @@ suite('selection-scoped gizmos', () => {
     expect(host.hitTest(before.x, before.y)).toBe(false);
   });
 
+  it('follows the scope transform previewed by the host drag', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    host.select([scopeId]);
+    host.paint();
+    const handleOf = () => host!.gizmoHandles().find(handle => handle.id.includes(':move:`A`.icon'))!;
+    const before = handleOf();
+    // select-suite moves a scope through a scene ScratchOverlay until release.
+    const scratch = host.world.createScratchOverlay('test:scope-drag');
+    scratch.set(scopeId, 'core.transform', { x: 900, y: 500, rotation: 0 });
+    host.paint();
+    const during = handleOf();
+    expect(Math.hypot(during.x - before.x, during.y - before.y)).toBeGreaterThan(300);
+    expect(host.hitTest(during.x, during.y)).toBe(true);
+    scratch.dispose();
+    host.paint();
+    const after = handleOf();
+    expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(1);
+  });
+
   it('paints handles in HUD-local coordinates, not client coordinates', async () => {
     host = await startHost({ clientOffset: { x: 120, y: 80 } });
     const rect = { x: 120, y: 80, left: 120, top: 80, right: 920, bottom: 680, width: 800, height: 600, toJSON: () => ({}) } as DOMRect;

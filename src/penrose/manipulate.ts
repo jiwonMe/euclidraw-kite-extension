@@ -137,7 +137,7 @@ export class PenroseManipulator {
       const scope = readScope(context.world, scopeId);
       const compiled = context.world.getComputed<CompiledScope>(scopeId, COMPUTED.compiled);
       const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
-      const box = readScopeBox(context.world.getCanonicalView(), scopeId);
+      const box = readScopeBox(this.previewView(), scopeId);
       if (!scope || !compiled || !layout || !box) continue;
       const pinned = new Set(scope.pins.map(pin => pin.index));
       const translatable = new Set(compiled.interactivity.translatable.map(input => input.path));
@@ -169,6 +169,12 @@ export class PenroseManipulator {
     return undefined;
   }
 
+  /** Transforms can live in a host ScratchOverlay while the user drags the scope. */
+  private previewView() {
+    const { context } = this.host;
+    return context.world.getPreviewView?.() ?? context.world.getCanonicalView();
+  }
+
   private liveValues(scopeId: EntityId): readonly number[] | undefined {
     return this.host.context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout)?.varyingValues;
   }
@@ -185,7 +191,7 @@ export class PenroseManipulator {
   private liveFrame(scopeId: EntityId): Frame | undefined {
     const { context } = this.host;
     const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
-    const box = readScopeBox(context.world.getCanonicalView(), scopeId);
+    const box = readScopeBox(this.previewView(), scopeId);
     return layout && box ? frameFor(layout.canvas, box) : undefined;
   }
 
