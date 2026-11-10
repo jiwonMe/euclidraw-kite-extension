@@ -188,6 +188,17 @@ export class PenroseRuntime {
     return result;
   }
 
+  /** End-of-drag full convergence from the current warm start. */
+  async polish(scopeId: EntityId, maxSteps?: number): Promise<WireLayout> {
+    const layout = await this.engine.polish(scopeId, maxSteps);
+    const entry = this.entries.get(scopeId);
+    if (entry) {
+      entry.layout = layout;
+      if (entry.compiled) entry.compiled = { ...entry.compiled, varyingValues: layout.varyingValues };
+    }
+    return layout;
+  }
+
   /** Drag a projected/derived point; the worker maps 2D motion to free inputs. */
   async pointDrag(scopeId: EntityId, handleId: string, target: { x: number; y: number }, steps: number, budgetMs?: number): Promise<WireLayout> {
     const layout = await this.engine.pointDrag(scopeId, handleId, target, steps, budgetMs);

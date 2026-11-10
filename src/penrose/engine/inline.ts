@@ -4,7 +4,7 @@
  * never enters `dist/plugin.js` through it.
  */
 import type { EngineClient } from './protocol.ts';
-import { compileSession, convergeSession, dragPointSession, dragSession, layoutOf, resampleSession, type CoreSession } from './core.ts';
+import { compileSession, convergeSession, dragPointSession, dragSession, layoutOf, polishSession, resampleSession, type CoreSession } from './core.ts';
 import type { CompileInput } from './core.ts';
 import type { WireCompiled, WireLayout } from '../wire.ts';
 
@@ -33,6 +33,9 @@ export function createInlineEngine(): EngineClient {
     },
     async converge(key: string, maxSteps?: number): Promise<WireCompiled> {
       return convergeSession(require(key), maxSteps);
+    },
+    async polish(key: string, maxSteps?: number): Promise<WireLayout> {
+      return polishSession(require(key), maxSteps);
     },
     async resample(key: string): Promise<WireCompiled> {
       return resampleSession(require(key));

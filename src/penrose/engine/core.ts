@@ -777,6 +777,21 @@ export function dragSession(
   return layoutOf(session);
 }
 
+/** After a drag: re-run every layout stage from the current warm start. */
+export function polishSession(session: CoreSession, maxSteps = 4000): WireLayout {
+  const state = session.state;
+  const restarted: PenroseState = {
+    ...state,
+    currentStageIndex: 0,
+    params: { ...start(state.varyingValues.length), weight: 1e3 } as PenroseState['params'],
+  };
+  const stepped = stepTimes(restarted, maxSteps);
+  if (stepped.isOk()) session.state = stepped.value;
+  session.compiled = compiledOf(session);
+  session.computed = buildComputedHandles(session);
+  return layoutOf(session);
+}
+
 export function resampleSession(session: CoreSession): WireCompiled {
   session.state = resample(session.state);
   session.compiled = compiledOf(session);

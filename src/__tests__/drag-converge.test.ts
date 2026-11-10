@@ -56,10 +56,18 @@ suite('per-frame drag convergence', () => {
       host.paint();
       expect(Math.abs(distance(host!, scopeId) - 100), `frame ${step}`).toBeLessThan(2);
     }
+    // Release: a full re-convergence hardens the softened drag state.
+    const beforeEnergy = layout(host, scopeId).energy;
+    const beforeDrop = centre(host, scopeId, 'a');
     host.pointer('pointerup', handle.x + 40, handle.y);
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise(resolve => setTimeout(resolve, 400));
     host.paint();
+    const afterEnergy = layout(host, scopeId).energy;
+    expect(afterEnergy).toBeLessThan(beforeEnergy);
     expect(Math.abs(distance(host, scopeId) - 100)).toBeLessThan(2);
+    const afterDrop = centre(host, scopeId, 'a');
+    // Polish must not visibly snap the dropped object away from the pointer.
+    expect(Math.hypot(afterDrop.x - beforeDrop.x, afterDrop.y - beforeDrop.y)).toBeLessThan(2);
   });
 
   it('keeps AutoLabel positions live during a drag', async () => {

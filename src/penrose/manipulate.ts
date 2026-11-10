@@ -409,8 +409,18 @@ export class PenroseManipulator {
         const result = session.target.kind === 'computed' && session.target.computedId
           ? await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0, 0)
           : await this.host.runtime.drag(scopeId, session.last, 0, 0);
+        // One full re-convergence after release hardens what the capped-weight
+        // drag frames left slightly soft.
+        let values = result.varyingValues;
+        try {
+          const scope = readScope(context.world, scopeId);
+          const polished = await this.host.runtime.polish(scopeId, scope ? readSolverConfig(scope.solverConfig).maxSteps : undefined);
+          values = polished.varyingValues;
+        } catch (error) {
+          console.error('[penrose] post-drag polish failed', error);
+        }
         if (this.session !== session) return;
-        commitDrag(this.host, scopeId, result.varyingValues);
+        commitDrag(this.host, scopeId, values);
         this.session = undefined;
         this.host.runtime.dragging = false;
         cleanup();
