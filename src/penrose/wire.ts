@@ -94,6 +94,8 @@ export interface WireComputedHandle {
   readonly owner?: string;
   readonly x: number;
   readonly y: number;
+  /** Present for angle-like points: rotate around this pivot instead of translating. */
+  readonly pivot?: { readonly x: number; readonly y: number };
 }
 
 export interface WireLayout {

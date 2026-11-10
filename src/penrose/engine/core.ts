@@ -40,6 +40,8 @@ export interface ComputedHandle extends WireComputedHandle {
   readonly indexes: readonly number[];
   /** Row-major 2×N Jacobian: [dx/di0, dy/di0, dx/di1, dy/di1, …]. */
   readonly jacobian: readonly number[];
+  /** True when the dominant motion is a rotation around the opposite Line end. */
+  readonly angular?: boolean;
 }
 
 export interface CoreSession {
@@ -198,7 +200,9 @@ function ownerMap(state: PenroseState): Map<string, string> {
 
 type PointField = 'center' | 'start' | 'end' | 'points';
 
-const MAX_COMPUTED_INPUTS = 96;
+// The ray-tracing example needs ~130 inputs; the Jacobian for 126 inputs over
+// 26 candidates takes ~7 ms, so this bound is generous but still finite.
+const MAX_COMPUTED_INPUTS = 200;
 const MAX_COMPUTED_HANDLES = 160;
 
 function shapesByName(shapes: readonly AnyShape[], out = new Map<string, AnyShape>()): Map<string, AnyShape> {
@@ -208,6 +212,35 @@ function shapesByName(shapes: readonly AnyShape[], out = new Map<string, AnyShap
     shapesByName(groupChildren(shape), out);
   }
   return out;
+}
+
+/** The other end of a Line, used as the pivot for an angular (rotate) gizmo. */
+function oppositeEndpoint(shape: AnyShape | undefined, field: PointField): [number, number] | undefined {
+  if (!shape || shape.shapeType !== 'Line') return undefined;
+  if (field === 'end') return pointOf(shape, 'start', 0);
+  if (field === 'start') return pointOf(shape, 'end', 0);
+  return undefined;
+}
+
+/**
+ * Is this point's dominant response to a free input a rotation around `pivot`
+ * rather than a translation? Ray/arrow tips are derived from a direction, so
+ * dragging them should change an angle; derived points that just copy a free
+ * input respond radially (or uniformly) and must stay translational.
+ */
+function isAngularPoint(row: readonly number[], point: [number, number], pivot: [number, number]): boolean {
+  const rx = point[0] - pivot[0], ry = point[1] - pivot[1];
+  const radius = Math.hypot(rx, ry);
+  if (!(radius > 1e-6)) return false;
+  const tx = -ry / radius, ty = rx / radius;
+  const ux = rx / radius, uy = ry / radius;
+  for (let k = 0; k < row.length / 2; k++) {
+    const dx = row[2 * k] ?? 0, dy = row[2 * k + 1] ?? 0;
+    const tangent = Math.abs(dx * tx + dy * ty);
+    const radial = Math.abs(dx * ux + dy * uy);
+    if (tangent > 1e-6 && tangent > 2.5 * radial) return true;
+  }
+  return false;
 }
 
 function pointOf(shape: AnyShape | undefined, field: PointField, index: number): [number, number] | undefined {
@@ -362,6 +395,10 @@ function buildComputedHandles(session: CoreSession): ComputedHandle[] {
     const row = jacobian[c]!;
     const magnitude = Math.hypot(...row);
     if (!(magnitude > 1e-6)) continue;
+    // Only tips get the angular grip: rotating a base around its tip is a
+    // different gesture and would fight the upstream geometry.
+    const pivot = candidate.field === 'end' ? oppositeEndpoint(baseByName.get(candidate.shape), candidate.field) : undefined;
+    const angular = pivot ? isAngularPoint(row, [candidate.x, candidate.y], pivot) : false;
     handles.push({
       id: `${candidate.shape}|${candidate.field}|${candidate.index}`,
       shape: candidate.shape,
@@ -372,6 +409,7 @@ function buildComputedHandles(session: CoreSession): ComputedHandle[] {
       y: candidate.y,
       indexes: free,
       jacobian: row,
+      ...(angular ? { angular: true } : {}),
     });
   }
   return handles;
@@ -628,8 +666,10 @@ export function layoutOf(session: CoreSession, varyingValues?: readonly number[]
   const rawByName = shapesByName(rawShapes);
   const computed: WireComputedHandle[] = [];
   for (const handle of session.computed) {
-    const point = pointOf(rawByName.get(handle.shape), handle.field, handle.index);
+    const shape = rawByName.get(handle.shape);
+    const point = pointOf(shape, handle.field, handle.index);
     if (!point) continue;
+    const pivot = handle.angular ? oppositeEndpoint(shape, handle.field) : undefined;
     computed.push({
       id: handle.id,
       shape: handle.shape,
@@ -638,6 +678,7 @@ export function layoutOf(session: CoreSession, varyingValues?: readonly number[]
       ...(handle.owner ? { owner: handle.owner } : {}),
       x: point[0],
       y: point[1],
+      ...(pivot ? { pivot: { x: pivot[0], y: pivot[1] } } : {}),
     });
   }
   const owners = new Set(ownersByName.values());
