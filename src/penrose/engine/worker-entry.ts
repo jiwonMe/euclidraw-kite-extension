@@ -4,7 +4,7 @@
  * with a scope key; sessions keep the compiled `State` (which holds functions,
  * so it cannot cross the postMessage boundary).
  */
-import { compileSession, convergeSession, dragSession, layoutOf, resampleSession, type CoreSession } from './core.ts';
+import { compileSession, convergeSession, dragPointSession, dragSession, layoutOf, resampleSession, type CoreSession } from './core.ts';
 import type { EngineRequest, EngineResponse } from './protocol.ts';
 
 const sessions = new Map<string, CoreSession>();
@@ -42,6 +42,11 @@ async function handle(request: EngineRequest) {
       case 'drag': {
         const session = requireSession(request.key);
         reply({ id: request.id, ok: true, layout: dragSession(session, request.targets, request.steps) });
+        return;
+      }
+      case 'point-drag': {
+        const session = requireSession(request.key);
+        reply({ id: request.id, ok: true, layout: dragPointSession(session, request.handleId, request.target, request.steps) });
         return;
       }
       case 'converge': {

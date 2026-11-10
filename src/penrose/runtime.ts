@@ -175,6 +175,14 @@ export class PenroseRuntime {
     return result;
   }
 
+  /** Drag a projected/derived point; the worker maps 2D motion to free inputs. */
+  async pointDrag(scopeId: EntityId, handleId: string, target: { x: number; y: number }, steps: number): Promise<WireLayout> {
+    const layout = await this.engine.pointDrag(scopeId, handleId, target, steps);
+    const entry = this.entries.get(scopeId);
+    if (entry) entry.layout = layout;
+    return layout;
+  }
+
   /** Drag preview: inputs are pinned to the pointer, the rest is re-optimized. */
   async drag(scopeId: EntityId, targets: readonly { index: number; value: number }[], steps: number): Promise<WireLayout> {
     const layout = await this.engine.drag(scopeId, targets, steps);

@@ -1,0 +1,20 @@
+canvas {
+  width = 200
+  height = 200
+}
+
+global {
+  -- A 3D point projected to the plane. Only q is free; p is derived.
+  vec3 q = (?, ?, ?)
+  vec2 p = (q[0] * 60 + 100, q[1] * 60 + 100)
+}
+
+forall Point a {
+  a.dot = Circle {
+    center: global.p
+    r: 5
+    fillColor: #2563eb
+    strokeColor: #1e3a8a
+    strokeWidth: 1
+  }
+}

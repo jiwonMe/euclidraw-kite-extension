@@ -81,6 +81,21 @@ export interface WireCompiled {
   readonly diagnostics: readonly WireDiagnostic[];
 }
 
+/**
+ * A point that is not a direct optimization input but moves when free inputs
+ * change (e.g. a projected 3D vertex). The worker owns the Jacobian; the main
+ * thread only needs the current screen position and an id to drag it.
+ */
+export interface WireComputedHandle {
+  readonly id: string;
+  readonly shape: string;
+  readonly field: 'center' | 'start' | 'end' | 'points';
+  readonly index: number;
+  readonly owner?: string;
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface WireLayout {
   readonly digest: string;
   readonly shapes: readonly WireShape[];
@@ -88,6 +103,8 @@ export interface WireLayout {
   readonly varyingValues: readonly number[];
   readonly owners: readonly string[];
   readonly interactivity: WireInteractivity;
+  /** Points derived from free inputs (projection, expressions). */
+  readonly computed: readonly WireComputedHandle[];
   /** Pre-rendered MathJax SVG markup keyed by shape name (Equation shapes). */
   readonly labels: Readonly<Record<string, string>>;
   readonly energy: number;

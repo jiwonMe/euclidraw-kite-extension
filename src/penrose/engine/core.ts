@@ -15,6 +15,7 @@ import { measureText, parseFontSize } from '../labels.ts';
 import type {
   WireCanvas,
   WireCompiled,
+  WireComputedHandle,
   WireDiagnostic,
   WireInputs,
   WireInteractivity,
@@ -34,12 +35,20 @@ export interface CompileInput {
   readonly maxSteps?: number;
 }
 
+export interface ComputedHandle extends WireComputedHandle {
+  /** Free input indexes this point depends on (Jacobian columns). */
+  readonly indexes: readonly number[];
+  /** Row-major 2×N Jacobian: [dx/di0, dy/di0, dx/di1, dy/di1, …]. */
+  readonly jacobian: readonly number[];
+}
+
 export interface CoreSession {
   key: string;
   digest: string;
   state: PenroseState;
   compiled: WireCompiled;
   labels: Record<string, string>;
+  computed: ComputedHandle[];
 }
 
 const adaptor = liteAdaptor();
@@ -180,6 +189,197 @@ function ownerMap(state: PenroseState): Map<string, string> {
     if (name && owner && !map.has(name)) map.set(name, owner);
   }
   return map;
+}
+
+// ── Computed (projected) handles ───────────────────────────────────────────
+
+type PointField = 'center' | 'start' | 'end' | 'points';
+
+const MAX_COMPUTED_INPUTS = 96;
+const MAX_COMPUTED_HANDLES = 160;
+
+function shapesByName(shapes: readonly AnyShape[], out = new Map<string, AnyShape>()): Map<string, AnyShape> {
+  for (const shape of shapes) {
+    const name = shape.name?.contents;
+    if (name) out.set(name, shape);
+    if (Array.isArray(shape.shapes)) {
+      for (const entry of shape.shapes as AnyValue[]) {
+        if (Array.isArray(entry.contents)) shapesByName(entry.contents as AnyShape[], out);
+      }
+    }
+  }
+  return out;
+}
+
+function pointOf(shape: AnyShape | undefined, field: PointField, index: number): [number, number] | undefined {
+  if (!shape) return undefined;
+  const container = field === 'points' ? (shape.points as { contents?: number[][] } | undefined) : (shape[field] as { contents?: number[] } | undefined);
+  const value = field === 'points' ? container?.contents?.[index] : container?.contents;
+  if (!Array.isArray(value) || value.length < 2) return undefined;
+  const x = Number(value[0]), y = Number(value[1]);
+  return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : undefined;
+}
+
+function freeInputIndexes(state: PenroseState): number[] {
+  const free: number[] = [];
+  state.inputs.forEach((input, index) => {
+    const meta = input as unknown as { meta?: { init?: { tag?: string } } };
+    if (meta.meta?.init?.tag !== 'Pending') free.push(index);
+  });
+  return free;
+}
+
+interface Candidate {
+  readonly shape: string;
+  readonly field: PointField;
+  readonly index: number;
+  readonly owner?: string;
+  readonly priority: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+function candidatesOf(shapes: readonly AnyShape[], owners: Map<string, string>): Candidate[] {
+  const found: Candidate[] = [];
+  const add = (shape: AnyShape, field: PointField, index: number, priority: number) => {
+    const name = shape.name?.contents;
+    if (!name) return;
+    const point = pointOf(shape, field, index);
+    if (!point) return;
+    const owner = owners.get(name);
+    found.push({ shape: name, field, index, ...(owner ? { owner } : {}), priority, x: point[0], y: point[1] });
+  };
+  const visit = (list: readonly AnyShape[]) => {
+    for (const shape of list) {
+      switch (shape.shapeType) {
+        case 'Circle':
+        case 'Ellipse':
+        case 'Image':
+        case 'Rectangle':
+          add(shape, 'center', 0, 1);
+          break;
+        case 'Line':
+          add(shape, 'start', 0, 2);
+          add(shape, 'end', 0, 2);
+          break;
+        case 'Polygon':
+        case 'Polyline': {
+          const points = (shape.points as { contents?: number[][] } | undefined)?.contents ?? [];
+          for (let index = 0; index < points.length; index++) add(shape, 'points', index, 3);
+          break;
+        }
+        case 'Group':
+          if (Array.isArray(shape.shapes)) {
+            for (const entry of shape.shapes as AnyValue[]) {
+              if (Array.isArray(entry.contents)) visit(entry.contents as AnyShape[]);
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  };
+  visit(shapes);
+  // Collapse stacked affordances (polygon vertex + vertex dot + label) into one.
+  const byPosition = new Map<string, Candidate>();
+  for (const candidate of found) {
+    const key = `${Math.round(candidate.x * 2)},${Math.round(candidate.y * 2)}`;
+    const previous = byPosition.get(key);
+    if (!previous || candidate.priority > previous.priority) byPosition.set(key, candidate);
+  }
+  return [...byPosition.values()];
+}
+
+function solvePointDelta(handle: ComputedHandle, dx: number, dy: number): number[] {
+  const count = handle.indexes.length;
+  let a = 0, b = 0, c = 0;
+  for (let k = 0; k < count; k++) {
+    const jx = handle.jacobian[2 * k] ?? 0, jy = handle.jacobian[2 * k + 1] ?? 0;
+    a += jx * jx; b += jx * jy; c += jy * jy;
+  }
+  const lambda = 1e-3 * Math.max(1, (a + c) / Math.max(1, count));
+  a += lambda; c += lambda;
+  const det = a * c - b * b;
+  const delta = new Array<number>(count).fill(0);
+  if (!(det > 1e-12)) return delta;
+  const u = (c * dx - b * dy) / det;
+  const v = (a * dy - b * dx) / det;
+  let peak = 0;
+  for (let k = 0; k < count; k++) {
+    delta[k] = (handle.jacobian[2 * k] ?? 0) * u + (handle.jacobian[2 * k + 1] ?? 0) * v;
+    peak = Math.max(peak, Math.abs(delta[k]!));
+  }
+  // Keep one frame's input change bounded so a nearly singular Jacobian cannot
+  // fling the diagram across the canvas.
+  const limit = 30;
+  if (peak > limit) for (let k = 0; k < count; k++) delta[k] = (delta[k]! / peak) * limit;
+  return delta;
+}
+
+/** Points that move because free inputs change, with a local 2D Jacobian. */
+function buildComputedHandles(session: CoreSession): ComputedHandle[] {
+  const state = session.state;
+  const free = freeInputIndexes(state);
+  if (!free.length || free.length > MAX_COMPUTED_INPUTS) return [];
+  const direct = new Set<string>();
+  for (const input of [...session.compiled.interactivity.translatable, ...session.compiled.interactivity.scalable]) {
+    if (input.center) direct.add(`${input.path}|center|0`);
+    if (input.start) direct.add(`${input.path}|start|0`);
+    if (input.end) direct.add(`${input.path}|end|0`);
+    for (let index = 0; index < (input.points?.length ?? 0); index++) direct.add(`${input.path}|points|${index}`);
+  }
+  const owners = ownerMap(state);
+  let baseShapes: AnyShape[];
+  try { baseShapes = state.computeShapes(state.varyingValues) as unknown as AnyShape[]; } catch { return []; }
+  const candidates = candidatesOf(baseShapes, owners)
+    .filter(candidate => !direct.has(`${candidate.shape}|${candidate.field}|${candidate.index}`))
+    .slice(0, MAX_COMPUTED_HANDLES);
+  if (!candidates.length) return [];
+  const baseByName = shapesByName(baseShapes);
+  const jacobian = candidates.map(() => new Array<number>(free.length * 2).fill(0));
+  const baseValues = [...state.varyingValues];
+  const working = [...baseValues];
+  const started = performance.now();
+  let complete = true;
+  for (let k = 0; k < free.length; k++) {
+    // Bound cold-open work: partial Jacobians would make handles misleading.
+    if (performance.now() - started > 250) { complete = false; break; }
+    const index = free[k]!;
+    const epsilon = 1e-4 * Math.max(1, Math.abs(working[index] ?? 0));
+    working[index] = (baseValues[index] ?? 0) + epsilon;
+    let perturbed: Map<string, AnyShape>;
+    try { perturbed = shapesByName(state.computeShapes(working) as unknown as AnyShape[]); } catch { working[index] = baseValues[index]!; continue; }
+    working[index] = baseValues[index]!;
+    for (let c = 0; c < candidates.length; c++) {
+      const candidate = candidates[c]!;
+      const before = pointOf(baseByName.get(candidate.shape), candidate.field, candidate.index);
+      const after = pointOf(perturbed.get(candidate.shape), candidate.field, candidate.index);
+      if (!before || !after) continue;
+      jacobian[c]![2 * k] = (after[0] - before[0]) / epsilon;
+      jacobian[c]![2 * k + 1] = (after[1] - before[1]) / epsilon;
+    }
+  }
+  if (!complete) return [];
+  const handles: ComputedHandle[] = [];
+  for (let c = 0; c < candidates.length; c++) {
+    const candidate = candidates[c]!;
+    const row = jacobian[c]!;
+    const magnitude = Math.hypot(...row);
+    if (!(magnitude > 1e-6)) continue;
+    handles.push({
+      id: `${candidate.shape}|${candidate.field}|${candidate.index}`,
+      shape: candidate.shape,
+      field: candidate.field,
+      index: candidate.index,
+      ...(candidate.owner ? { owner: candidate.owner } : {}),
+      x: candidate.x,
+      y: candidate.y,
+      indexes: free,
+      jacobian: row,
+    });
+  }
+  return handles;
 }
 
 // ── Labels (deterministic) ─────────────────────────────────────────────────
@@ -408,6 +608,7 @@ export async function compileSession(input: CompileInput): Promise<CoreSession> 
     state: measured,
     compiled: undefined as unknown as WireCompiled,
     labels: labels.svgs,
+    computed: [],
   };
 
   const seeds = input.seeds ?? [];
@@ -419,6 +620,7 @@ export async function compileSession(input: CompileInput): Promise<CoreSession> 
     session.state = optimized.value;
   }
   session.compiled = compiledOf(session);
+  session.computed = buildComputedHandles(session);
   return session;
 }
 
@@ -426,7 +628,23 @@ export function layoutOf(session: CoreSession, varyingValues?: readonly number[]
   const state = session.state;
   const values = varyingValues ? [...varyingValues] : state.varyingValues;
   const ownersByName = ownerMap(state);
-  const shapes = (state.computeShapes(values) as unknown as AnyShape[]).map(shape => toWireShape(shape, ownersByName));
+  const rawShapes = state.computeShapes(values) as unknown as AnyShape[];
+  const shapes = rawShapes.map(shape => toWireShape(shape, ownersByName));
+  const rawByName = shapesByName(rawShapes);
+  const computed: WireComputedHandle[] = [];
+  for (const handle of session.computed) {
+    const point = pointOf(rawByName.get(handle.shape), handle.field, handle.index);
+    if (!point) continue;
+    computed.push({
+      id: handle.id,
+      shape: handle.shape,
+      field: handle.field,
+      index: handle.index,
+      ...(handle.owner ? { owner: handle.owner } : {}),
+      x: point[0],
+      y: point[1],
+    });
+  }
   const owners = new Set(ownersByName.values());
   return {
     digest: session.digest,
@@ -435,6 +653,7 @@ export function layoutOf(session: CoreSession, varyingValues?: readonly number[]
     varyingValues: values,
     owners: [...owners].sort(),
     interactivity: interactivityOf(state),
+    computed,
     labels: session.labels,
     energy: evalEnergy({ ...state, varyingValues: values }),
     stages: state.currentStageIndex,
@@ -446,7 +665,42 @@ export function convergeSession(session: CoreSession, maxSteps = 10_000): WireCo
   const stepped = stepTimes(session.state, maxSteps);
   if (stepped.isOk()) session.state = stepped.value;
   session.compiled = compiledOf(session);
+  session.computed = buildComputedHandles(session);
   return session.compiled;
+}
+
+/**
+ * Drag a point that is not itself an input (projection, expression) by solving
+ * the local 2D Jacobian for a minimum-norm input change, then re-converging.
+ */
+export function dragPointSession(
+  session: CoreSession,
+  handleId: string,
+  target: { x: number; y: number },
+  steps: number,
+): WireLayout {
+  const handle = session.computed.find(entry => entry.id === handleId);
+  if (!handle) return layoutOf(session);
+  let state = session.state;
+  for (let round = 0; round < 2; round++) {
+    let shapes: Map<string, AnyShape>;
+    try { shapes = shapesByName(state.computeShapes(state.varyingValues) as unknown as AnyShape[]); } catch { break; }
+    const point = pointOf(shapes.get(handle.shape), handle.field, handle.index);
+    if (!point) break;
+    const dx = target.x - point[0], dy = target.y - point[1];
+    if (Math.hypot(dx, dy) < 0.05) break;
+    const delta = solvePointDelta(handle, dx, dy);
+    const values = [...state.varyingValues];
+    for (let k = 0; k < handle.indexes.length; k++) {
+      const index = handle.indexes[k]!;
+      values[index] = (values[index] ?? 0) + delta[k]!;
+    }
+    state = { ...state, varyingValues: values };
+    const stepped = stepTimes(state, Math.max(0, steps));
+    if (stepped.isOk()) state = stepped.value;
+  }
+  session.state = state;
+  return layoutOf(session);
 }
 
 /** Drag: move the given input indexes to absolute targets, step, then re-pin. */
@@ -473,5 +727,6 @@ export function dragSession(
 export function resampleSession(session: CoreSession): WireCompiled {
   session.state = resample(session.state);
   session.compiled = compiledOf(session);
+  session.computed = buildComputedHandles(session);
   return session.compiled;
 }

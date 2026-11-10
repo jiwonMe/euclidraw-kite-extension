@@ -9,8 +9,9 @@ import type { WireInputs } from './wire.ts';
 interface HandleTarget {
   readonly scopeId: EntityId;
   readonly frame: Frame;
-  readonly input: WireInputs;
-  readonly kind: 'move' | 'scale';
+  readonly kind: 'move' | 'scale' | 'computed';
+  readonly input?: WireInputs;
+  readonly computedId?: string;
 }
 
 interface DragSession {
@@ -18,6 +19,7 @@ interface DragSession {
   readonly baseline: readonly number[];
   readonly startCanvas: { x: number; y: number };
   last: { index: number; value: number }[];
+  preview?: { x: number; y: number };
   inflight?: Promise<void>;
   ending: boolean;
 }
@@ -28,9 +30,10 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 interface Paintable {
   readonly scopeId: EntityId;
   readonly canvas: { readonly width: number; readonly height: number };
-  readonly input: WireInputs;
-  readonly kind: 'move' | 'scale';
+  readonly kind: 'move' | 'scale' | 'computed';
   readonly path: string;
+  readonly input?: WireInputs;
+  readonly computedId?: string;
 }
 
 /** Every optimization input index of one style path, matching runtime order. */
@@ -152,8 +155,46 @@ export class PenroseManipulator {
         if (translatable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'move', layout.varyingValues, registry);
         if (scalable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'scale', layout.varyingValues, registry);
       }
+      // Projected points: not direct inputs, but movable through their free
+      // inputs. The worker owns the Jacobian; the main thread only drags.
+      for (const handle of layout.computed) {
+        if (!showAll && !(handle.owner && owners?.has(handle.owner))) continue;
+        this.addComputedHandle(scopeId, layout.canvas, handle.id, registry);
+      }
     }
     this.paintOverlay();
+  }
+
+  private addComputedHandle(
+    scopeId: EntityId,
+    canvas: { readonly width: number; readonly height: number },
+    handleId: string,
+    registry: CanvasToolSurface['selection']['gizmos'],
+  ): void {
+    const off = registry.register({
+      id: `penrose:${scopeId}:computed:${handleId}`,
+      priority: HANDLE_PRIORITY - 1,
+      shape: 'circle',
+      radiusScreenPx: 6,
+      getWorldPosition: out => {
+        const frame = this.liveFrame(scopeId);
+        const point = this.computedPoint(scopeId, handleId);
+        if (!frame || !point) return false;
+        const world = this.worldOfCanvas(frame, point);
+        out.x = world.x; out.y = world.y;
+        return true;
+      },
+      onPointerDown: event => {
+        const surface = this.surface ?? surfaceOf(this.host.context);
+        const frame = this.liveFrame(scopeId);
+        if (!surface || !frame) return false;
+        event.preventDefault();
+        this.begin(scopeId, frame, { kind: 'computed', computedId: handleId }, event, surface);
+        return true;
+      },
+    });
+    this.disposeHandles.push(off);
+    this.paintables.push({ scopeId, canvas, kind: 'computed', path: handleId, computedId: handleId });
   }
 
   private canvasPoint(input: WireInputs, values: readonly number[]): { x: number; y: number } | undefined {
@@ -177,6 +218,11 @@ export class PenroseManipulator {
 
   private liveValues(scopeId: EntityId): readonly number[] | undefined {
     return this.host.context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout)?.varyingValues;
+  }
+
+  private computedPoint(scopeId: EntityId, handleId: string): { x: number; y: number } | undefined {
+    const handle = this.host.context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout)?.computed.find(entry => entry.id === handleId);
+    return handle ? { x: handle.x, y: handle.y } : undefined;
   }
 
   private handlePoint(input: WireInputs, kind: 'move' | 'scale', values: readonly number[]): { x: number; y: number } | undefined {
@@ -224,12 +270,12 @@ export class PenroseManipulator {
         const frame = this.liveFrame(scopeId);
         if (!surface || !frame) return false;
         event.preventDefault();
-        this.begin(scopeId, frame, input, kind, event, surface);
+        this.begin(scopeId, frame, { kind, input }, event, surface);
         return true;
       },
     });
     this.disposeHandles.push(off);
-    this.paintables.push({ scopeId, canvas, input, kind, path: input.path });
+    this.paintables.push({ scopeId, canvas, kind, path: input.path, input });
   }
 
   /** World gizmos are painted in screen pixels into the host HUD, never the document. */
@@ -264,18 +310,27 @@ export class PenroseManipulator {
     const parts: string[] = [];
     for (const paintable of this.paintables) {
       const halfW = paintable.canvas.width / 2, halfH = paintable.canvas.height / 2;
-      if (!valuesOf.has(paintable.scopeId)) valuesOf.set(paintable.scopeId, this.liveValues(paintable.scopeId));
-      let values = valuesOf.get(paintable.scopeId);
-      if (!values) continue;
-      // The dragged handle tracks the pointer immediately, before the worker
-      // answers; every other handle follows the solved layout each frame.
-      if (active && active.target.scopeId === paintable.scopeId
-        && active.target.kind === paintable.kind && active.target.input.path === paintable.path) {
-        const preview = [...values];
-        for (const target of active.last) if (target.index >= 0 && target.index < preview.length) preview[target.index] = target.value;
-        values = preview;
+      const isActive = !!active && active.target.scopeId === paintable.scopeId
+        && active.target.kind === paintable.kind
+        && (paintable.kind === 'computed'
+          ? active.target.computedId === paintable.computedId
+          : active.target.input?.path === paintable.path);
+      let point: { x: number; y: number } | undefined;
+      if (paintable.kind === 'computed') {
+        // The dragged projected point follows the pointer immediately; others
+        // come from the latest layout the worker produced.
+        point = isActive && active?.preview ? active.preview : this.computedPoint(paintable.scopeId, paintable.computedId!);
+      } else {
+        if (!valuesOf.has(paintable.scopeId)) valuesOf.set(paintable.scopeId, this.liveValues(paintable.scopeId));
+        let values = valuesOf.get(paintable.scopeId);
+        if (!values || !paintable.input) continue;
+        if (isActive && active) {
+          const preview = [...values];
+          for (const target of active.last) if (target.index >= 0 && target.index < preview.length) preview[target.index] = target.value;
+          values = preview;
+        }
+        point = this.handlePoint(paintable.input, paintable.kind, values);
       }
-      const point = this.handlePoint(paintable.input, paintable.kind, values);
       if (!point || Math.abs(point.x) > halfW || Math.abs(point.y) > halfH) continue;
       const frame = frameOf(paintable.scopeId);
       if (!frame) continue;
@@ -283,8 +338,6 @@ export class PenroseManipulator {
       surface.host.worldToScreen(world.x, world.y, screen);
       const x = round(screen.x - hudRect.left);
       const y = round(screen.y - hudRect.top);
-      const isActive = !!active && active.target.scopeId === paintable.scopeId
-        && active.target.kind === paintable.kind && active.target.input.path === paintable.path;
       // Round handles in the host's selection palette.
       parts.push(
         `<circle cx="${x}" cy="${y}" r="4" ` +
@@ -318,8 +371,7 @@ export class PenroseManipulator {
   private begin(
     scopeId: EntityId,
     frame: Frame,
-    input: WireInputs,
-    kind: 'move' | 'scale',
+    target: { kind: 'move' | 'scale' | 'computed'; input?: WireInputs; computedId?: string },
     event: PointerEvent,
     surface: CanvasToolSurface,
   ): void {
@@ -330,7 +382,7 @@ export class PenroseManipulator {
     const start = { x: 0, y: 0 };
     surface.host.screenToWorld(event.clientX, event.clientY, start);
     const session: DragSession = {
-      target: { scopeId, frame, input, kind },
+      target: { scopeId, frame, ...target },
       baseline: [...layout.varyingValues],
       startCanvas: this.canvasOfWorld(frame, start),
       last: [],
@@ -343,7 +395,9 @@ export class PenroseManipulator {
       if (this.session !== session) return;
       const world = { x: 0, y: 0 };
       surface.host.screenToWorld(move.clientX, move.clientY, world);
-      session.last = this.targetsFor(session, this.canvasOfWorld(frame, world));
+      const canvas = this.canvasOfWorld(frame, world);
+      if (session.target.kind === 'computed') session.preview = canvas;
+      else session.last = this.targetsFor(session, canvas);
       void this.flush(session);
     };
     const onUp = (up: PointerEvent) => {
@@ -352,7 +406,9 @@ export class PenroseManipulator {
       session.ending = true;
       const finish = async () => {
         if (session.inflight) await session.inflight;
-        const result = await this.host.runtime.drag(scopeId, session.last, 0);
+        const result = session.target.kind === 'computed' && session.target.computedId
+          ? await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0)
+          : await this.host.runtime.drag(scopeId, session.last, 0);
         if (this.session !== session) return;
         commitDrag(this.host, scopeId, result.varyingValues);
         this.session = undefined;
@@ -398,6 +454,7 @@ export class PenroseManipulator {
   private targetsFor(session: DragSession, canvas: { x: number; y: number }): { index: number; value: number }[] {
     const { input, kind } = session.target;
     const { baseline, startCanvas } = session;
+    if (!input || kind === 'computed') return [];
     if (kind === 'move') {
       const dx = canvas.x - startCanvas.x, dy = canvas.y - startCanvas.y;
       const pairs: [number, number][] = [];
@@ -426,12 +483,16 @@ export class PenroseManipulator {
   private async flush(session: DragSession): Promise<void> {
     if (this.session !== session) return;
     if (session.inflight) return;
-    const sent = session.last;
+    const sent = session.target.kind === 'computed' ? session.preview : session.last;
     session.inflight = (async () => {
       const scope = readScope(this.host.context.world, session.target.scopeId);
       const steps = scope ? readSolverConfig(scope.solverConfig).dragSteps : 2;
       try {
-        await this.host.runtime.drag(session.target.scopeId, sent, steps);
+        if (session.target.kind === 'computed' && session.target.computedId) {
+          await this.host.runtime.pointDrag(session.target.scopeId, session.target.computedId, session.preview ?? session.startCanvas, steps);
+        } else {
+          await this.host.runtime.drag(session.target.scopeId, session.last, steps);
+        }
       } catch (error) {
         console.error('[penrose] drag failed', error);
       }
@@ -439,7 +500,10 @@ export class PenroseManipulator {
     })();
     await session.inflight;
     session.inflight = undefined;
-    if (this.session === session && !session.ending && session.last !== sent) void this.flush(session);
+    const changed = session.target.kind === 'computed'
+      ? session.preview !== sent
+      : session.last !== sent;
+    if (this.session === session && !session.ending && changed) void this.flush(session);
   }
 
   private cancel(): void {

@@ -90,6 +90,12 @@ class WorkerEngine implements EngineClient {
     return response.layout;
   }
 
+  async pointDrag(key: string, handleId: string, target: { x: number; y: number }, steps: number): Promise<WireLayout> {
+    const response = await this.unwrap(await this.request({ type: 'point-drag', key, handleId, target, steps }), 'point drag');
+    if (!response.layout) throw new Error('Penrose point drag returned no result');
+    return response.layout;
+  }
+
   async converge(key: string, maxSteps?: number): Promise<WireCompiled> {
     const response = await this.unwrap(await this.request({ type: 'converge', key, maxSteps }), 'converge');
     if (!response.compiled) throw new Error('Penrose converge returned no result');

@@ -4,7 +4,7 @@ import { canvasBoundsToWorld, frameFor, readScopeBox } from './frame.ts';
 import { hitOwner, ownerBounds, type RenderOptions } from './render.ts';
 import type { PenroseRuntime } from './runtime.ts';
 import { SCOPE_ASPECT, type PenroseMemberAspect, type PenroseScopeAspect } from './schema.ts';
-import type { WireBounds, WireCanvas, WireDiagnostic, WireInteractivity, WireLayout } from './wire.ts';
+import type { WireBounds, WireCanvas, WireComputedHandle, WireDiagnostic, WireInteractivity, WireLayout } from './wire.ts';
 
 export interface CompiledScope {
   readonly ok: boolean;
@@ -24,6 +24,7 @@ export interface SolvedLayout {
   readonly owners: readonly string[];
   readonly bounds: Readonly<Record<string, WireBounds>>;
   readonly shapes: WireLayout['shapes'];
+  readonly computed: readonly WireComputedHandle[];
   readonly labels: Readonly<Record<string, string>>;
   readonly varyingValues: readonly number[];
   readonly energy: number;
@@ -130,6 +131,7 @@ export function createComputedSpecs(runtime: PenroseRuntime): {
         owners: result.owners,
         bounds: boundsOf(result),
         shapes: result.shapes,
+        computed: result.computed,
         labels: result.labels,
         varyingValues: result.varyingValues,
         energy: result.energy,

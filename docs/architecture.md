@@ -70,7 +70,15 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - Image는 `data:` URI만 허용하고, 인라인 SVG는 script·이벤트 속성을 제거합니다.
 - 패스스루 속성은 허용 목록으로 거르고 모든 문자열을 이스케이프합니다.
 
-## 6. 조작
+## 6. 투영 핸들
+
+- 도형 속성이 직접 입력이 아니어도, 자유 입력에 의해 움직이는 점이면 핸들을 만듭니다. 대상은 Polygon/Polyline의 각 점, Line의 시작·끝, Circle/Ellipse/Rectangle/Image의 중심입니다.
+- 컴파일 시 자유 입력을 하나씩 미세하게 흔들어 `computeShapes`를 다시 돌리고, 각 점의 2D 야코비안 `J = ∂(x,y)/∂inputs` 를 수치적으로 만듭니다(자유 입력 96개, 핸들 160개, 계산 250ms 상한).
+- 드래그는 `Δinputs = Jᵀ(JJᵀ + λI)⁻¹ Δtarget` 의 최소노름 해를 적용하고 `stepTimes`로 다시 수렴시킵니다. 2회 반복해 잔차를 줄입니다.
+- 3D→2D 투영처럼 2D로 결정되지 않는 자유도는 최소노름이라 현재 값 부근을 유지합니다. 야코비안은 현재 값 근처의 선형 근사입니다.
+- 같은 위치의 점(폴리곤 꼭짓점 + 점 도형 + 라벨)은 우선순위로 합쳐 핸들 하나만 남깁니다.
+
+## 7. 조작
 
 - 핸들은 **선택 범위 안에서만** 생깁니다: 선택한 스코프의 모든 자유 입력, 또는 선택한 멤버의 자유 입력. 판정은 `state.interactivityInfo`의 자유 입력 기준이며 core의 `isTranslatable`보다 넓습니다. 핀이 걸린 입력, 읽기 전용 스코프, 식으로 계산된 속성에는 없습니다.
 - 기즈모는 호스트 선택 핸들과 같은 지름 8px 원(흰 채움), `var(--alid-accent,#008FF0)` 테두리 1.25px로 HUD에 그립니다. 드래그 중인 핸들은 워커 응답을 기다리지 않고 포인터 목표값으로 즉시 이동하고, 나머지 핸들은 매 프레임 수렴 결과를 따라갑니다. `worldToScreen`은 클라이언트 좌표를 돌려주므로 HUD의 `getBoundingClientRect()` 원점을 빼서 HUD-로컬로 그립니다. 프레임은 매번 **preview view**의 `core.transform`/`core.bounds`에서 계산해(호스트가 스코프를 끄는 동안의 ScratchOverlay 포함) 핸들이 즉시 따라오게 하고, 스코프 캔버스(±w/2, ±h/2) 밖 좌표는 그리지 않습니다. 문서 SVG에 포함되지 않으므로 내보내기에 새지 않습니다.
@@ -80,19 +88,19 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 놓을 때 0스텝 재핀 → `varyingValues` 한 트랜잭션 커밋 → Undo 1회로 원복.
 - 취소(Esc·blur·pointercancel)는 저장된 입력으로 레이아웃만 되돌립니다.
 
-## 7. 패널
+## 8. 패널
 
 - `penrose.panel.tri-editor`와 `penrose.panel.diagnostics`는 `navigation.group = document`로 활동 레일에 노출됩니다.
 - 호스트는 패널 열기를 `ui.shell`로 자기 UI에만 제공하고, 이 서비스는 확장 컨텍스트에서 `PhantomDependency`로 막힙니다. 따라서 확장 명령은 열기를 시도한 뒤 실패하면 레일 위치를 안내합니다.
 
-## 8. 호스트 변경 없음
+## 9. 호스트 변경 없음
 
 - 설치 API 2의 공개 계약만 씁니다.
 - TeX는 호스트에 노출되지 않으므로 MathJax를 번들에 포함합니다(워커 크기 2.88 MiB).
 - 텍스트 측정 서비스도 없으므로 고정 메트릭 표를 씁니다.
 - 비동기 Computed 반영은 `invalidateComputed()`로 이미 가능합니다.
 
-## 8. 한계
+## 10. 한계
 
 - 페널티 기반 최적화라 하드 구속이 근사적으로만 만족됩니다.
 - `Path`·`Group`은 기즈모가 없고, `Image`는 외부 URL을 허용하지 않습니다.
