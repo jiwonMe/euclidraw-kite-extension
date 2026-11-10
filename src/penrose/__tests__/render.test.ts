@@ -73,6 +73,24 @@ describe('penrose SVG renderer (no DOM)', () => {
     expect(shapeBounds(shapes[1]!)?.x).toBe(94.5);
   });
 
+  it('writes complete arc commands (flags are not dropped)', () => {
+    const path: WireShape = {
+      shapeType: 'Path',
+      name: 'arc',
+      owner: 'e',
+      props: {
+        d: [
+          { cmd: 'A', values: [{ kind: 'value', values: [5, 5, 0, 0, 1] }, { kind: 'coord', x: 10, y: 0 }] },
+          { cmd: 'L', values: [{ kind: 'coord', x: 0, y: 10 }] },
+        ],
+      },
+      passthrough: {},
+    };
+    const svg = renderScene([path], { canvas });
+    // rx ry rotation large-arc sweep x y — seven values, then the next segment.
+    expect(svg).toContain('d="A 5 5 0 0 1 210 150 L 200 140"');
+  });
+
   it('renders identical output for identical input', () => {
     const shapes = [circle('A', 10, 20, 6), circle('B', -30, 40, 8)];
     expect(renderScene(shapes, { canvas })).toBe(renderScene(shapes, { canvas }));

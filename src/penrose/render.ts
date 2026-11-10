@@ -230,13 +230,12 @@ function pathData(shape: WireShape, canvas: WireCanvas): string {
   const parts: string[] = [];
   for (const command of commands) {
     if (!command || typeof command.cmd !== 'string') continue;
-    const values = (command.values ?? []).map(value => {
-      if (typeof value === 'number') return String(round(value));
-      if (Array.isArray(value) && value.length >= 2) {
-        const [x, y] = screenOf(canvas, [Number(value[0]) || 0, Number(value[1]) || 0]);
-        return `${round(x)} ${round(y)}`;
+    const values = (command.values ?? []).flatMap(entry => {
+      if (entry.kind === 'coord') {
+        const [x, y] = screenOf(canvas, [entry.x, entry.y]);
+        return [`${round(x)} ${round(y)}`];
       }
-      return '0';
+      return [entry.values.map(value => round(value)).join(' ')];
     });
     parts.push(`${command.cmd} ${values.join(' ')}`.trim());
   }
@@ -422,9 +421,7 @@ export function shapeBounds(shape: WireShape): WireBounds | undefined {
     case 'Path': {
       const commands = Array.isArray(shape.props.d) ? (shape.props.d as readonly WirePathCommand[]) : [];
       for (const command of commands) {
-        for (const value of command.values) {
-          if (Array.isArray(value) && value.length >= 2) add(Number(value[0]) || 0, Number(value[1]) || 0);
-        }
+        for (const entry of command.values) if (entry.kind === 'coord') add(entry.x, entry.y);
       }
       break;
     }

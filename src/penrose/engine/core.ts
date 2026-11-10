@@ -86,12 +86,15 @@ function encode(value: unknown): WireValue {
       return Array.isArray(contents)
         ? (contents as { cmd?: string; contents?: { tag?: string; contents?: unknown }[] }[]).map(command => ({
             cmd: command.cmd ?? '',
-            values: (command.contents ?? []).map(part =>
-              part.tag === 'CoordV' && Array.isArray(part.contents)
-                ? (part.contents as number[])
-                : typeof part.contents === 'number'
-                  ? part.contents
-                  : 0),
+            values: (command.contents ?? []).map(part => {
+              if (part.tag === 'CoordV' && Array.isArray(part.contents)) {
+                const [x, y] = part.contents as number[];
+                return { kind: 'coord' as const, x: Number(x) || 0, y: Number(y) || 0 };
+              }
+              // `ValueV` carries an array for arcs: rx ry rotation large-arc sweep.
+              const raw = Array.isArray(part.contents) ? part.contents : typeof part.contents === 'number' ? [part.contents] : [];
+              return { kind: 'value' as const, values: raw.map(Number).filter(Number.isFinite) };
+            }),
           }))
         : null;
     case 'ShapeListV':

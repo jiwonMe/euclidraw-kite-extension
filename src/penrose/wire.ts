@@ -5,10 +5,14 @@
  */
 export type Color = readonly [number, number, number, number];
 
+export type WirePathValue =
+  | { readonly kind: 'coord'; readonly x: number; readonly y: number }
+  | { readonly kind: 'value'; readonly values: readonly number[] };
+
 export interface WirePathCommand {
   readonly cmd: string;
-  /** `[x, y]` for `CoordV`, a number for `ValueV`. */
-  readonly values: readonly (readonly number[] | number)[];
+  /** Absolute coordinates and scalar arguments, in path command order. */
+  readonly values: readonly WirePathValue[];
 }
 
 export type WireValue =
