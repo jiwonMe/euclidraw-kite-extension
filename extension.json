@@ -1,50 +1,33 @@
 {
-  "id": "kite.studio",
-  "title": "Kite Studio",
-  "version": "0.2.0",
-  "summary": "Domain · Substance · Style 3분할 DSL과 Wasm SIMD 다양체 정사영 솔버로, 개별 점·선·원·라벨이 일급 캔버스 엔티티인 구속 기하 도해를 만듭니다.",
+  "id": "penrose.studio",
+  "title": "Penrose Studio",
+  "version": "0.3.0",
+  "summary": "Penrose Domain · Substance · Style과 최적화 엔진을 내장해, 자유도가 있는 도해를 캔버스에서 직접 움직입니다.",
   "engine": "^0.1.0",
   "dependencies": {},
   "optionalDependencies": {
     "core.select-suite": "^0.1.0",
     "core.clipboard": "^0.1.0",
-    "sys.minibuffer": "^0.1.0",
-    "doc.markdown-math": "^0.1.0",
     "vector.pen-suite": "^0.1.0"
   },
   "conflicts": [],
   "provides": {
     "services": [
-      "kite.api"
+      "penrose.api"
     ],
     "hsmSlots": [
-      "root.select.kite.studio:manipulate",
-      "root.select.kite.studio:create"
+      "root.select.penrose.studio:manipulate",
+      "root.select.penrose.studio:create"
     ]
   },
   "commands": [
     "insert-scope",
-    "add-point",
-    "add-segment",
-    "add-circle",
-    "add-label",
     "apply-dsl",
     "reset-example",
-    "constrain",
-    "constrain-tangent",
-    "constrain-perpendicular",
-    "constrain-parallel",
-    "constrain-on-circle",
-    "constrain-midpoint",
-    "constrain-equal-length",
-    "constrain-distance",
-    "relax-constraint",
-    "remove-constraint",
-    "toggle-pin",
     "reproject",
+    "resample",
+    "toggle-pin",
     "bake-to-vector",
-    "extract-subgraph",
-    "set-param",
     "open-tri-editor",
     "open-diagnostics"
   ]

@@ -7,6 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createInlineEngine } from '../penrose/engine/inline.ts';
 
 declare const __HAS_ALID__: boolean;
 declare const __ALID_CORE_WASM__: string;
@@ -25,6 +26,8 @@ export async function load() {
   const core: Any = await import('alid-host:core');
   coreReady ??= core.default({ module_or_path: readFileSync(__ALID_CORE_WASM__) });
   await coreReady;
+  // Node has no Web Worker: run the same engine code in-process.
+  (globalThis as Any).__PENROSE_ENGINE_FACTORY__ = () => createInlineEngine();
   const plugin: Any = (await import('../../dist/plugin.js' as string)).default;
   const manifest = JSON.parse(file('alid.extension.json'));
   return { kernel, repo, bounds, clipboard, core, plugin, manifest, source: file('dist/plugin.js') };
@@ -142,7 +145,7 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
     completions,
     answer: (_prompt, labels) => labels[0] ?? null,
     async run(command, args) { return await commands.execute(command, args) as never; },
-    api: () => registry.getExtensionApi?.('kite.studio') ?? (registry as Any).records?.get('kite.studio')?.api,
+    api: () => registry.getExtensionApi?.('penrose.studio') ?? (registry as Any).records?.get('penrose.studio')?.api,
     jsonl: () => wasm.dump_canonical_jsonl(),
     dispose() { registry.dispose(); commands.dispose(); services.dispose(); stateMachine.dispose(); wasm.free(); surface.remove(); hud.remove(); if (errors.length) console.warn('[host errors]', errors); },
   };
@@ -154,7 +157,7 @@ export async function settle(host: Host): Promise<void> {
   for (let attempt = 0; attempt < 200; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 5));
     host.paint();
-    const scopes = host.world.listEntityIds().filter((id: string) => host.world.getCanonical(id, 'kite.scope'));
-    if (!scopes.length || scopes.every((id: string) => host.world.getComputed(id, 'computed.kite.solvedGeometry'))) return;
+    const scopes = host.world.listEntityIds().filter((id: string) => host.world.getCanonical(id, 'penrose.scope'));
+    if (!scopes.length || scopes.every((id: string) => host.world.getComputed(id, 'computed.penrose.layout'))) return;
   }
 }

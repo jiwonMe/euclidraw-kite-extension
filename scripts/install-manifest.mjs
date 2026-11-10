@@ -3,7 +3,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { validateConfig } from './validate-config.mjs';
 
 export const root = new URL('../', import.meta.url);
-export const ASPECT_IDS = ['kite.scope', 'kite.member'];
+export const ASPECT_IDS = ['penrose.scope', 'penrose.member'];
 
 export async function readConfig() {
   return validateConfig(JSON.parse(await readFile(new URL('extension.json', root), 'utf8')));

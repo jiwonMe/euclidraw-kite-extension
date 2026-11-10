@@ -1,42 +1,40 @@
 {
   "apiVersion": 2,
-  "id": "kite.studio",
-  "version": "0.2.0",
+  "id": "penrose.studio",
+  "version": "0.3.0",
   "engine": "^0.1.0",
   "dependencies": {},
   "optionalDependencies": {
     "core.select-suite": "^0.1.0",
     "core.clipboard": "^0.1.0",
-    "sys.minibuffer": "^0.1.0",
-    "doc.markdown-math": "^0.1.0",
     "vector.pen-suite": "^0.1.0"
   },
   "conflicts": [],
   "provides": {
     "services": [
-      "kite.api"
+      "penrose.api"
     ],
     "aspects": [
-      "kite.scope",
-      "kite.member"
+      "penrose.scope",
+      "penrose.member"
     ],
     "hsmSlots": [
-      "root.select.kite.studio:manipulate",
-      "root.select.kite.studio:create"
+      "root.select.penrose.studio:manipulate",
+      "root.select.penrose.studio:create"
     ]
   },
-  "title": "Kite Studio",
-  "summary": "Domain · Substance · Style 3분할 DSL과 Wasm SIMD 다양체 정사영 솔버로, 개별 점·선·원·라벨이 일급 캔버스 엔티티인 구속 기하 도해를 만듭니다.",
+  "title": "Penrose Studio",
+  "summary": "Penrose Domain · Substance · Style과 최적화 엔진을 내장해, 자유도가 있는 도해를 캔버스에서 직접 움직입니다.",
   "entry": "dist/plugin.js",
-  "sha256": "df5c25d70ed9a4ccf8079d93808ec023494757c9ca97b80bc3615bcaf21d0712",
+  "sha256": "99a483713f5ca8188fc4b401652b999c5e45c6891f38db5fb02d02a37774c36d",
   "aspectIds": [
-    "kite.scope",
-    "kite.member"
+    "penrose.scope",
+    "penrose.member"
   ],
   "capabilities": {
     "readAspects": [
-      "kite.scope",
-      "kite.member",
+      "penrose.scope",
+      "penrose.member",
       "core.transform",
       "core.bounds",
       "core.stacking",
@@ -44,8 +42,8 @@
       "vector.path"
     ],
     "writeAspects": [
-      "kite.scope",
-      "kite.member",
+      "penrose.scope",
+      "penrose.member",
       "core.transform",
       "core.bounds",
       "core.stacking",
@@ -63,30 +61,15 @@
       "ui.workbench"
     ],
     "commands": [
-      "kite.studio:insert-scope",
-      "kite.studio:add-point",
-      "kite.studio:add-segment",
-      "kite.studio:add-circle",
-      "kite.studio:add-label",
-      "kite.studio:apply-dsl",
-      "kite.studio:reset-example",
-      "kite.studio:constrain",
-      "kite.studio:constrain-tangent",
-      "kite.studio:constrain-perpendicular",
-      "kite.studio:constrain-parallel",
-      "kite.studio:constrain-on-circle",
-      "kite.studio:constrain-midpoint",
-      "kite.studio:constrain-equal-length",
-      "kite.studio:constrain-distance",
-      "kite.studio:relax-constraint",
-      "kite.studio:remove-constraint",
-      "kite.studio:toggle-pin",
-      "kite.studio:reproject",
-      "kite.studio:bake-to-vector",
-      "kite.studio:extract-subgraph",
-      "kite.studio:set-param",
-      "kite.studio:open-tri-editor",
-      "kite.studio:open-diagnostics"
+      "penrose.studio:insert-scope",
+      "penrose.studio:apply-dsl",
+      "penrose.studio:reset-example",
+      "penrose.studio:reproject",
+      "penrose.studio:resample",
+      "penrose.studio:toggle-pin",
+      "penrose.studio:bake-to-vector",
+      "penrose.studio:open-tri-editor",
+      "penrose.studio:open-diagnostics"
     ]
   }
 }

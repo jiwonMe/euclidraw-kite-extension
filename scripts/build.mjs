@@ -1,11 +1,11 @@
+import { execFileSync } from 'node:child_process';
 import { build } from 'vite';
-import { buildWasm } from './build-wasm.mjs';
 import { readConfig, writeInstallManifest } from './install-manifest.mjs';
 
 await readConfig();
-// 1. crate-kite-solver → src/generated/kite-solver-wasm.ts (incremental, hash-checked)
-buildWasm();
-// 2. TypeScript → one self-contained ESM (Wasm inlined as base64)
+// 1. @penrose/core worker → src/generated/penrose-worker.ts (single ES module string)
+execFileSync(process.execPath, ['scripts/build-worker.mjs'], { stdio: 'inherit' });
+// 2. extension entry → one self-contained ESM (worker inlined as a string)
 await build({ logLevel: 'warn' });
 // 3. alid.extension.json with the bundle's SHA-256
 const manifest = await writeInstallManifest();
