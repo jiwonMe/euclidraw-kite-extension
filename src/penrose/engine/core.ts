@@ -725,7 +725,14 @@ export function dragPointSession(
  * every frame after the first would skip convergence.
  */
 function settleForDrag(state: PenroseState, steps: number, budgetMs = 0): PenroseState {
-  const params = { ...start(state.varyingValues.length), weight: state.params.weight } as PenroseState['params'];
+  // Very high EP weights make L-BFGS' preconditioned convergence check stall
+  // before it takes a step (labels then look frozen). A moderate weight still
+  // pulls constraints while keeping the optimizer moving.
+  const DRAG_WEIGHT = 1e5;
+  const params = {
+    ...start(state.varyingValues.length),
+    weight: Math.min(state.params.weight, DRAG_WEIGHT),
+  } as PenroseState['params'];
   const restarted: PenroseState = { ...state, params };
   if (budgetMs > 0) {
     const started = performance.now();

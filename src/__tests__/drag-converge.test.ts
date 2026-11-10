@@ -22,6 +22,11 @@ function centre(h: Host, scopeId: string, owner: string) {
   const [x, y] = (shape as { props: { center: number[] } }).props.center;
   return { x: x!, y: y! };
 }
+const label = (h: Host, scopeId: string, owner: string) => {
+  const shape = layout(h, scopeId).shapes.find((entry: { owner?: string; shapeType: string }) => entry.owner === owner && entry.shapeType === 'Text');
+  const [x, y] = (shape as { props: { center: number[] } }).props.center;
+  return { x: x!, y: y! };
+};
 const distance = (h: Host, scopeId: string) => {
   const a = centre(h, scopeId, 'a'), b = centre(h, scopeId, 'b');
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -55,5 +60,34 @@ suite('per-frame drag convergence', () => {
     await new Promise(resolve => setTimeout(resolve, 120));
     host.paint();
     expect(Math.abs(distance(host, scopeId) - 100)).toBeLessThan(2);
+  });
+
+  it('keeps AutoLabel positions live during a drag', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    await host.run('penrose.studio:apply-dsl', {
+      scopeId,
+      domainDsl: fixture('graph.domain'),
+      substanceDsl: fixture('graph.substance'),
+      styleDsl: fixture('graph.style'),
+    });
+    await settle(host);
+    host.select([scopeId]);
+    host.paint();
+    const before = label(host, scopeId, 'Chicago');
+    const handle = host.gizmoHandles().find(entry => entry.id.includes(':move:`Chicago`.dot'))!;
+    const commits = host.commits();
+    expect(host.press(handle.x, handle.y)).toBe(true);
+    for (let step = 1; step <= 4; step++) {
+      host.pointer('pointermove', handle.x + step * 10, handle.y);
+      await new Promise(resolve => setTimeout(resolve, 80));
+      host.paint();
+    }
+    const during = label(host, scopeId, 'Chicago');
+    expect(Math.hypot(during.x - before.x, during.y - before.y)).toBeGreaterThan(5);
+    expect(host.commits()).toBe(commits);
+    host.pointer('pointerup', handle.x + 40, handle.y);
+    await new Promise(resolve => setTimeout(resolve, 120));
   });
 });
