@@ -70,7 +70,10 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - Group 클립은 스코프별 유일 ID의 `<clipPath>`입니다.
 - Equation은 사전 렌더된 MathJax SVG를 정화해 삽입합니다.
 - Group의 멤버는 배열이 아니라 `ShapeListV` 값(`shape.shapes.contents`)에 들어 있고, `clipPath`는 `ClipDataV`(`NoClip | Clip`)이며 `clip(x)`는 도형 **하나**를 담습니다. `Array.isArray(shape.shapes)`로 검사하면 그룹 내용이 통째로 사라지므로(구현 초기 버그) 항상 `contents`를 풀어 읽습니다. 그룹 안의 도형도 소유자·라벨·투영 핸들 수집 대상입니다.
-- Image는 `data:` URI만 허용하고, 인라인 SVG는 script·이벤트 속성을 제거합니다. 상대 경로 `href`(예: Penrose 예제의 `ball-shading.svg`)는 문서에 파일 컨텍스트가 없어 해석하지 못하므로 그려지지 않습니다.
+- Image의 `href`는 세 가지를 지원합니다: `data:image/svg+xml`(URL 인코딩 또는 `;base64`), 그리고 Penrose 공식 예제가 스타일에서 상대 이름으로 참조하는 소형 SVG 에셋(`ball-shading.svg`, `node-shading.svg`, `background.svg`, `radial-gradient.svg`, …)을 `assets.ts`의 basename 표로 해석합니다. 그 외 외부 URL은 로드하지 않습니다.
+- 인라인 SVG는 `<defs>`·`<radialGradient>`·`<linearGradient>`를 그대로 살려 **그라디언트가 동작**합니다. 원본의 `viewBox`를 유지해야 아트워크 좌표가 요청한 width/height로 스케일됩니다(지우면 100×100 에셋이 100px 사각형으로만 그려집니다).
+- 같은 아트워크를 여러 번 인라인하므로 인스턴스마다 id와 class에 색 이름 기반 접두사를 붙입니다. 그러지 않으면 모든 복사본이 문서의 첫 `url(#gradient)` 정의와 `<style>` 규칙을 공유합니다. script·이벤트 속성·`http(s)` 참조는 제거해 내보낸 문서가 네트워크를 타지 않습니다.
+- `style` 패스스루(예: `style: "filter:blur(5px);"`)를 허용하되 `javascript:`·`expression()`·`@import`·원격 `url()`은 제거합니다.
 - Equation은 MathJax가 만든 그림을 인라인 `<svg>`로 넣습니다. MathJax는 `<mjx-container>`(비 SVG 커스텀 엘리먼트)로 감싸는데, 이것을 그대로 장면에 넣으면 아무것도 칠해지지 않으므로 내부 `<svg>`만 남깁니다. 글리프는 `fill="currentColor"`로 칠해지므로 도형의 `fillColor`를 CSS `color`로도 전달합니다.
 - 패스스루 속성은 허용 목록으로 거르고 모든 문자열을 이스케이프합니다.
 - 스코프 본문은 `overflow="hidden"`인 중첩 `<svg>` 뷰포트(캔버스 크기)로 감싸 도해가 스코프 밖으로 새지 않게 합니다. `url(#…)` 클립을 쓰지 않아 순수 벡터·결정성이 유지됩니다.

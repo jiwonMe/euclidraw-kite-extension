@@ -2,6 +2,7 @@
  * Pure SVG renderer for Penrose shapes. No DOM, no `<foreignObject>`, no
  * `url(#…)` references: screen and export share this exact string.
  */
+import { PENROSE_ASSETS } from './assets.ts';
 import type { Color, WireBounds, WireCanvas, WirePathCommand, WireShape, WireValue } from './wire.ts';
 
 export interface RenderOptions {
@@ -73,14 +74,25 @@ const PASSTHROUGH: Readonly<Record<string, string>> = {
   visibility: 'visibility',
   color: 'color',
   colorInterpolation: 'color-interpolation',
+  style: 'style',
 };
+
+/** CSS text from a style passthrough; no external fetches, no script. */
+function safeStyle(value: string): string {
+  return value
+    .replace(/javascript:/gi, '')
+    .replace(/expression\s*\(/gi, '')
+    .replace(/@import[^;]*;?/gi, '')
+    .replace(/url\(\s*['"]?(?:https?:)?\/\/[^)'"]*\)/gi, 'none');
+}
 
 function passthrough(shape: WireShape): string {
   let out = '';
   for (const [key, value] of Object.entries(shape.passthrough)) {
     const name = PASSTHROUGH[key];
     if (!name || value === null) continue;
-    const text = typeof value === 'number' ? String(round(value)) : String(value);
+    const text = key === 'style' ? safeStyle(String(value)) : typeof value === 'number' ? String(round(value)) : String(value);
+    if (!text) continue;
     out += ` ${name}="${escapeXml(text)}"`;
   }
   return out;
@@ -276,6 +288,78 @@ function renderText(shape: WireShape, canvas: WireCanvas): string {
   );
 }
 
+function decodeBase64(text: string): string {
+  const clean = text.replace(/[^A-Za-z0-9+/=]/g, '');
+  if (!clean) return '';
+  const atobFn = (globalThis as { atob?: (input: string) => string }).atob;
+  if (typeof atobFn === 'function') {
+    try {
+      const binary = atobFn(clean);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+/**
+ * Markup for an SVG `href`. `data:` URIs work as-is (plain or base64) and
+ * relative Penrose example assets resolve by basename; anything else is not
+ * loaded (no network, no file system in a document).
+ */
+function svgHrefMarkup(href: string): string | undefined {
+  if (href.startsWith('data:image/svg+xml')) {
+    const rest = href.slice('data:image/svg+xml'.length);
+    const comma = rest.indexOf(',');
+    if (comma === -1) return undefined;
+    const header = rest.slice(0, comma);
+    const body = rest.slice(comma + 1);
+    if (!body) return undefined;
+    const decoded = /;base64/i.test(header) ? decodeBase64(body) : decodeURIComponent(body);
+    return decoded.includes('<svg') ? stripProlog(decoded) : undefined;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) return undefined;
+  const name = href.split(/[?#]/)[0]!.split('/').pop() ?? '';
+  const asset = PENROSE_ASSETS[name];
+  if (!asset) return undefined;
+  return stripProlog(decodeBase64(asset));
+}
+
+/** Drop the XML prolog/doctype: an inlined drawing is mid-document, where they are invalid. */
+function stripProlog(markup: string): string {
+  return markup
+    .replace(/<\?xml[\s\S]*?\?>/gi, '')
+    .replace(/<!DOCTYPE[\s\S]*?>/gi, '')
+    .trim();
+}
+
+/**
+ * Give an inlined SVG's ids and classes a per-instance prefix: two copies of
+ * the same artwork would otherwise share one `url(#gradient)` definition and
+ * `<style>` rules would leak across the whole document.
+ */
+function scopeSvg(markup: string, prefix: string): string {
+  let out = markup;
+  for (const match of markup.matchAll(/\bid="([^"]+)"/g)) {
+    const id = match[1]!;
+    out = out
+      .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
+      .replaceAll(`url(#${id})`, `url(#${prefix}-${id})`)
+      .replaceAll(`href="#${id}"`, `href="#${prefix}-${id}"`);
+  }
+  for (const match of markup.matchAll(/\bclass="([^"]+)"/g)) {
+    for (const cls of match[1]!.split(/\s+/).filter(Boolean)) {
+      out = out
+        .replaceAll(`class="${cls}"`, `class="${prefix}-${cls}"`)
+        .replaceAll(`.${cls}`, `.${prefix}-${cls}`);
+    }
+  }
+  return out;
+}
+
 function sanitizeSvg(markup: string): string {
   return markup
     // Older documents stored MathJax's `<mjx-container>` wrapper; only the
@@ -285,7 +369,11 @@ function sanitizeSvg(markup: string): string {
     .replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*\/?>/gi, '')
     .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
     .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
-    .replace(/javascript:/gi, '');
+    .replace(/javascript:/gi, '')
+    // No network fetches from an embedded drawing.
+    .replace(/url\(\s*['"]?(?:https?:)?\/\/[^)'"]*\)/gi, 'none')
+    .replace(/\s(?:xlink:)?href\s*=\s*"(?!#|data:)[^"]*"/gi, '')
+    .replace(/\s(?:xlink:)?href\s*=\s*'(?!#|data:)[^']*'/gi, '');
 }
 
 function renderEquation(shape: WireShape, options: RenderOptions): string {
@@ -308,27 +396,27 @@ function renderEquation(shape: WireShape, options: RenderOptions): string {
 
 function renderImage(shape: WireShape, canvas: WireCanvas): string {
   const href = str(shape.props.href);
-  if (!href.startsWith('data:image/')) return ''; // external resources are not allowed
   const [x, y] = screenOf(canvas, vec(shape.props.center));
   const w = Math.max(0, num(shape.props.width));
   const h = Math.max(0, num(shape.props.height));
   const rotation = num(shape.props.rotation);
   const transform = `translate(${round(x - w / 2)} ${round(y - h / 2)})` + (rotation ? ` rotate(${round(rotation)} ${round(w / 2)} ${round(h / 2)})` : '');
-  if (href.startsWith('data:image/svg+xml')) {
-    try {
-      const decoded = decodeURIComponent(href.slice('data:image/svg+xml'.length).replace(/^[;,]+/, ''));
-      const inner = sanitizeSvg(decoded)
-        .replace(/<svg\b([^>]*)>/, (_match, attrs: string) => {
-          const cleaned = attrs
-            .replace(/\s(width|height|x|y)=("[^"]*"|'[^']*')/gi, '')
-            .replace(/\sviewBox=("[^"]*"|'[^']*')/gi, '');
-          return `<svg${cleaned} width="${round(w)}" height="${round(h)}" preserveAspectRatio="xMidYMid meet">`;
-        });
-      return `<g transform="${transform}">${inner}</g>`;
-    } catch {
-      return '';
-    }
+  const markup = svgHrefMarkup(href);
+  if (markup) {
+    const token = `${shape.name.replace(/[^\w-]/g, '_') || 'image'}`;
+    const scoped = scopeSvg(sanitizeSvg(markup), token);
+    const inner = scoped.replace(/<svg\b([^>]*)>/, (_match, attrs: string) => {
+      // Keep the viewBox: without it the artwork's own units are not scaled to
+      // the requested width/height (a 100x100 asset would draw a 100px square).
+      const cleaned = attrs
+        .replace(/\s(width|height|x|y)=("[^"]*"|'[^']*')/gi, '')
+        .replace(/\spreserveAspectRatio=("[^"]*"|'[^']*')/gi, '');
+      const par = escapeXml(str(shape.props.preserveAspectRatio) || 'xMidYMid meet');
+      return `<svg${cleaned} width="${round(w)}" height="${round(h)}" preserveAspectRatio="${par}">`;
+    });
+    return `<g transform="${transform}">${inner}</g>`;
   }
+  if (!href.startsWith('data:image/')) return ''; // external resources are not allowed
   return `<image href="${escapeXml(href)}" x="0" y="0" width="${round(w)}" height="${round(h)}" transform="${transform}" preserveAspectRatio="${escapeXml(str(shape.props.preserveAspectRatio, 'xMidYMid meet'))}"/>`;
 }
 
