@@ -1,0 +1,16 @@
+canvas {
+  width = 400
+  height = 300
+}
+
+forall P p {
+  p.icon = Circle {
+    center: (?, ?)
+    r: 5
+    fillColor: #2563eb
+  }
+}
+
+forall P a; P b {
+  ensure vdist(a.icon.center, b.icon.center) == 100
+}

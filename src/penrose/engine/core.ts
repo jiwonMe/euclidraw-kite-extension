@@ -3,7 +3,7 @@
  * Node test engine; the extension's main chunk must keep `@penrose/core` out
  * (a second copy would blow the 5 MiB install budget).
  */
-import { compileTrio, evalEnergy, insertPending, optimize, resample, step, stepTimes } from '@penrose/core';
+import { compileTrio, evalEnergy, insertPending, optimize, resample, start, step, stepTimes } from '@penrose/core';
 import type { PenroseState } from '@penrose/core';
 import { mathjax } from 'mathjax-full/js/mathjax.js';
 import { TeX } from 'mathjax-full/js/input/tex.js';
@@ -699,23 +699,45 @@ export function dragPointSession(
     // Split the frame budget across the two IK rounds.
     state = settleForDrag({ ...state, varyingValues: values }, Math.max(0, steps), budgetMs > 0 ? budgetMs / 2 : 0);
   }
+  // Final exact correction: the dragged point must sit under the pointer even
+  // if the last convergence pass pulled it away; the next frame re-converges.
+  try {
+    const shapes = shapesByName(state.computeShapes(state.varyingValues) as unknown as AnyShape[]);
+    const point = pointOf(shapes.get(handle.shape), handle.field, handle.index);
+    if (point) {
+      const delta = solvePointDelta(handle, target.x - point[0], target.y - point[1]);
+      const values = [...state.varyingValues];
+      for (let k = 0; k < handle.indexes.length; k++) {
+        const index = handle.indexes[k]!;
+        values[index] = (values[index] ?? 0) + delta[k]!;
+      }
+      state = { ...state, varyingValues: values };
+    }
+  } catch { /* keep the converged state */ }
   session.state = state;
   return layoutOf(session);
 }
 
-/** One drag frame: fixed steps, or re-converge until the wall-clock budget. */
+/**
+ * One drag frame. The previous optimizer state ends at `EPConverged`, where
+ * `step` is a no-op; because a drag changes `varyingValues` directly, we must
+ * restart the optimizer (keeping the warm-start values and penalty weight) or
+ * every frame after the first would skip convergence.
+ */
 function settleForDrag(state: PenroseState, steps: number, budgetMs = 0): PenroseState {
+  const params = { ...start(state.varyingValues.length), weight: state.params.weight } as PenroseState['params'];
+  const restarted: PenroseState = { ...state, params };
   if (budgetMs > 0) {
     const started = performance.now();
     try {
-      const stepped = step(state, { until: () => performance.now() - started >= budgetMs });
-      return stepped.isOk() ? stepped.value : state;
+      const stepped = step(restarted, { until: () => performance.now() - started >= budgetMs });
+      return stepped.isOk() ? stepped.value : restarted;
     } catch {
-      return state;
+      return restarted;
     }
   }
-  const stepped = stepTimes(state, steps);
-  return stepped.isOk() ? stepped.value : state;
+  const stepped = stepTimes(restarted, steps);
+  return stepped.isOk() ? stepped.value : restarted;
 }
 
 /** Drag: move the given input indexes to absolute targets, converge, then re-pin. */
@@ -729,13 +751,23 @@ export function dragSession(
   for (const target of targets) {
     if (target.index >= 0 && target.index < values.length) values[target.index] = target.value;
   }
-  session.state = settleForDrag({ ...session.state, varyingValues: values }, steps, budgetMs);
-  const pinned = [...session.state.varyingValues];
-  for (const target of targets) {
-    if (target.index >= 0 && target.index < pinned.length) pinned[target.index] = target.value;
+  const deadline = performance.now() + Math.max(0, budgetMs);
+  let state: PenroseState = { ...session.state, varyingValues: values };
+  // Alternate converge and re-pin: pinning after a converged step leaves the
+  // rest of the diagram at the pre-pin solution, so run a second round inside
+  // the same frame budget.
+  const rounds = budgetMs > 0 ? 2 : 1;
+  for (let round = 0; round < rounds; round++) {
+    const remaining = budgetMs > 0 ? Math.max(1, deadline - performance.now()) : 0;
+    state = settleForDrag(state, steps, remaining);
+    const pinned = [...state.varyingValues];
+    for (const target of targets) {
+      if (target.index >= 0 && target.index < pinned.length) pinned[target.index] = target.value;
+    }
+    state = { ...state, varyingValues: pinned };
   }
-  session.state.varyingValues = pinned;
-  return layoutOf(session, pinned);
+  session.state = state;
+  return layoutOf(session);
 }
 
 export function resampleSession(session: CoreSession): WireCompiled {
