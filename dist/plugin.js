@@ -402,10 +402,12 @@ function ve(e) {
 }
 function ye(e) {
 	if (e.startsWith("data:image/svg+xml")) {
-		let t = e.slice(18), n = t.replace(/^[;,]+/, "");
-		if (!n) return;
-		let r = /^;base64/i.test(t) ? ve(n) : decodeURIComponent(n);
-		return r.includes("<svg") ? be(r) : void 0;
+		let t = e.slice(18), n = t.indexOf(",");
+		if (n === -1) return;
+		let r = t.slice(0, n), i = t.slice(n + 1);
+		if (!i) return;
+		let a = /;base64/i.test(r) ? ve(i) : decodeURIComponent(i);
+		return a.includes("<svg") ? be(a) : void 0;
 	}
 	if (/^[a-z][a-z0-9+.-]*:/i.test(e) || e.startsWith("//")) return;
 	let t = ie[e.split(/[?#]/)[0].split("/").pop() ?? ""];
