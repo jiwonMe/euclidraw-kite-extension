@@ -69,7 +69,7 @@ export interface ToolStateMachine {
 export interface GizmoHit { id: string; priority: number; distanceScreenPx: number }
 export interface GizmoRegistry {
   register(handle: {
-    id: string; priority: number; shape: 'circle' | 'rect'; radiusScreenPx?: number;
+    id: string; priority: number; shape: 'circle' | 'rect'; radiusScreenPx?: number; widthScreenPx?: number; heightScreenPx?: number;
     getWorldPosition(out: MutablePoint): boolean; onPointerDown?(event: PointerEvent): boolean;
   }): () => void;
   hitTest(clientX: number, clientY: number, worldToScreen: (x: number, y: number, out: MutablePoint) => void, out: GizmoHit): boolean;

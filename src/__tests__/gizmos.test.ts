@@ -19,7 +19,7 @@ const center = (h: Host, memberId: string) => {
   const box = h.world.getComputed(memberId, 'computed.penrose.member');
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
-const dots = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length;
+const dots = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] rect').length;
 
 suite('selection-scoped gizmos', () => {
   it('shows nothing without a selection, everything for a scope, one for a member', async () => {
@@ -102,12 +102,31 @@ suite('selection-scoped gizmos', () => {
     host.select([scopeId]);
     host.paint();
     const handles = host.gizmoHandles();
-    const circles = [...host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle')];
-    expect(circles.length).toBe(handles.length);
-    for (const circle of circles) {
-      const x = Number(circle.getAttribute('cx'));
+    const squares = [...host.hud.querySelectorAll('[data-role="penrose-gizmos"] rect')];
+    expect(squares.length).toBe(handles.length);
+    for (const square of squares) {
+      const x = Number(square.getAttribute('x')) + 3.5;
       expect(handles.some(handle => Math.abs(handle.x - x) < 0.6)).toBe(true);
     }
+  });
+
+  it('moves the dragged handle with the pointer before the worker answers', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    host.select([bindings(host, scopeId).A!]);
+    host.paint();
+    const handle = host.gizmoHandles()[0]!;
+    expect(host.press(handle.x, handle.y)).toBe(true);
+    host.pointer('pointermove', handle.x + 40, handle.y + 20);
+    host.paint();
+    const square = host.hud.querySelector('[data-role="penrose-gizmos"] rect')!;
+    const x = Number(square.getAttribute('x')) + 3.5;
+    const y = Number(square.getAttribute('y')) + 3.5;
+    expect(Math.abs(x - (handle.x + 40))).toBeLessThan(0.6);
+    expect(Math.abs(y - (handle.y + 20))).toBeLessThan(0.6);
+    host.pointer('pointerup', handle.x + 40, handle.y + 20);
+    await settle(host);
   });
 
   it('hides the handle of a pinned object and restores it when unpinned', async () => {
