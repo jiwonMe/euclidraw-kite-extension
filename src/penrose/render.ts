@@ -65,6 +65,7 @@ const PASSTHROUGH: Readonly<Record<string, string>> = {
   letterSpacing: 'letter-spacing',
   wordSpacing: 'word-spacing',
   textDecoration: 'text-decoration',
+  paintOrder: 'paint-order',
   fontFamily: 'font-family',
   fontSize: 'font-size',
   fontStyle: 'font-style',

@@ -24,7 +24,7 @@
 - `canvas { width = … height = … }`
 - `forall Type x { … }`, 이름 선택자 `forall Point A { … }`
 - 셰이프: `Circle`, `Ellipse`, `Line`, `Polygon`, `Polyline`, `Rectangle`, `Path`, `Text`, `Equation`, `Image`, `Group`
-- 레이블: `Text`(고정 문자열), `Equation`(TeX). `AutoLabel`은 이 빌드에서 검증하지 않았습니다.
+- 레이블: `Text`(고정 문자열), `Equation`(TeX), `AutoLabel`·`Label`(Substance). 다중 간선·자기 루프·staged layout(`layout = [...]`) 예제를 회귀 테스트로 검증합니다.
 - `fillColor`, `strokeColor`, `strokeWidth`, `strokeStyle`, `strokeDasharray`, `strokeLinecap`, `opacity` 등 표준 속성.
 - `ensure`/`encourage`, `layout` 단계, `override`/`delete`, `collect`는 core가 그대로 처리합니다(이 저장소의 테스트 범위 밖).
 

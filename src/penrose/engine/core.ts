@@ -376,21 +376,24 @@ export async function compileSession(input: CompileInput): Promise<CoreSession> 
   const state = compiled.value;
   const labels = collectLabelDims(state);
   state.labelCache = labels.cache as never;
-  insertPending(state);
+  // `insertPending` returns a new state whose `varyingValues` carry the measured
+  // label sizes. Keeping the old object leaves width/height at their pending
+  // zero, which makes rect-based text constraints produce NaN.
+  const measured = insertPending(state);
 
   const session: CoreSession = {
     key: '',
     digest: input.digest,
-    state,
+    state: measured,
     compiled: undefined as unknown as WireCompiled,
     labels: labels.svgs,
   };
 
   const seeds = input.seeds ?? [];
-  if (seeds.length === state.varyingValues.length && input.seeds !== undefined) {
-    state.varyingValues = [...seeds];
+  if (seeds.length === measured.varyingValues.length && input.seeds !== undefined) {
+    session.state = { ...measured, varyingValues: [...seeds] };
   } else {
-    const optimized = optimize(state);
+    const optimized = optimize(measured);
     if (optimized.isErr()) throw Object.assign(new Error('Penrose optimize failed'), { penroseDiagnostics: toDiagnostics(optimized.error) });
     session.state = optimized.value;
   }
