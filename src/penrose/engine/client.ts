@@ -102,8 +102,8 @@ class WorkerEngine implements EngineClient {
     return response.compiled;
   }
 
-  async polish(key: string, maxSteps?: number): Promise<WireLayout> {
-    const response = await this.unwrap(await this.request({ type: 'polish', key, maxSteps }), 'polish');
+  async polish(key: string, options?: { maxSteps?: number; budgetMs?: number; pins?: readonly { index: number; value: number }[] }): Promise<WireLayout> {
+    const response = await this.unwrap(await this.request({ type: 'polish', key, options }), 'polish');
     if (!response.layout) throw new Error('Penrose polish returned no result');
     return response.layout;
   }

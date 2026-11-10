@@ -34,8 +34,8 @@ export function createInlineEngine(): EngineClient {
     async converge(key: string, maxSteps?: number): Promise<WireCompiled> {
       return convergeSession(require(key), maxSteps);
     },
-    async polish(key: string, maxSteps?: number): Promise<WireLayout> {
-      return polishSession(require(key), maxSteps);
+    async polish(key: string, options?: { maxSteps?: number; budgetMs?: number; pins?: readonly { index: number; value: number }[] }): Promise<WireLayout> {
+      return polishSession(require(key), options);
     },
     async resample(key: string): Promise<WireCompiled> {
       return resampleSession(require(key));

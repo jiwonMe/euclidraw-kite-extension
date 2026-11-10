@@ -413,9 +413,13 @@ export class PenroseManipulator {
         // drag frames left slightly soft.
         let values = result.varyingValues;
         try {
-          const scope = readScope(context.world, scopeId);
-          const polished = await this.host.runtime.polish(scopeId, scope ? readSolverConfig(scope.solverConfig).maxSteps : undefined);
+          const pins = session.target.kind === 'computed' ? [] : session.last;
+          const polished = await this.host.runtime.polish(scopeId, { budgetMs: 80, pins });
           values = polished.varyingValues;
+          if (session.target.kind === 'computed' && session.target.computedId) {
+            const snapped = await this.host.runtime.pointDrag(scopeId, session.target.computedId, session.preview ?? session.startCanvas, 0, 0);
+            values = snapped.varyingValues;
+          }
         } catch (error) {
           console.error('[penrose] post-drag polish failed', error);
         }

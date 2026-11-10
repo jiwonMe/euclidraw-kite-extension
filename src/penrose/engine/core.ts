@@ -866,16 +866,46 @@ export function dragSession(
   return layoutOf(session);
 }
 
-/** After a drag: re-run every layout stage from the current warm start. */
-export function polishSession(session: CoreSession, maxSteps = 4000): WireLayout {
+export interface PolishOptions {
+  readonly maxSteps?: number;
+  /** Wall-clock budget for the polish pass (0 = run maxSteps). */
+  readonly budgetMs?: number;
+  /** Inputs to restore after polishing (the dragged handle's targets). */
+  readonly pins?: readonly { index: number; value: number }[];
+}
+
+/**
+ * A gentle end-of-drag clean-up. Re-running every stage from stage 0 re-solved
+ * the whole diagram and made objects jump on release, so polish only the
+ * current stage at the drag weight, restore the dragged inputs, and keep labels
+ * attached to their owner's movement.
+ */
+export function polishSession(session: CoreSession, options: PolishOptions = {}): WireLayout {
+  const { maxSteps = 4000, budgetMs = 0, pins = [] } = options;
+  const beforeLabels = labelSnapshot(session.state);
   const state = session.state;
   const restarted: PenroseState = {
     ...state,
-    currentStageIndex: 0,
-    params: { ...start(state.varyingValues.length), weight: 1e3 } as PenroseState['params'],
+    params: { ...start(state.varyingValues.length), weight: Math.min(state.params.weight, 1e8) } as PenroseState['params'],
   };
-  const stepped = stepTimes(restarted, maxSteps);
-  if (stepped.isOk()) session.state = stepped.value;
+  let polished = restarted;
+  if (budgetMs > 0) {
+    const started = performance.now();
+    try {
+      const stepped = step(restarted, { until: () => performance.now() - started >= budgetMs });
+      if (stepped.isOk()) polished = stepped.value;
+    } catch { /* keep restarted */ }
+  } else {
+    const stepped = stepTimes(restarted, maxSteps);
+    if (stepped.isOk()) polished = stepped.value;
+  }
+  if (pins.length) {
+    const values = [...polished.varyingValues];
+    for (const pin of pins) if (pin.index >= 0 && pin.index < values.length) values[pin.index] = pin.value;
+    polished = { ...polished, varyingValues: values };
+  }
+  followLabels(polished, beforeLabels, polished);
+  session.state = polished;
   session.compiled = compiledOf(session);
   session.computed = buildComputedHandles(session);
   return layoutOf(session);

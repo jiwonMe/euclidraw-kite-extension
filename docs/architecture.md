@@ -90,7 +90,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 드래그 중 penalty weight는 **1e8로 상한**을 둡니다. EP가 1e9까지 올린 weight를 그대로 쓰면 L-BFGS의 preconditioned 수렴 검사가 스텝 전에 멈춰 AutoLabel이 얼어붙습니다. 1e8은 AutoLabel이 계속 움직이는 가장 높은 값이며(1e9에서 정지), 1e5 대비 거리 제약 잔차가 약 2.3px에서 0.65px로 줄었습니다. 예산 안에서 수렴·재핀을 3회 교대합니다.
 - 예산(`solverConfig.dragBudgetMs`, 기본 10ms) 안에서 **수렴 → 끈 입력 재핀**을 두 번 교대합니다. 한 번만 하면 재핀 직후 제약 잔차가 남기 때문입니다. 예산이 0이면 `dragSteps` 고정 스텝을 씁니다.
 - 투영 핸들은 IK 2회 후 **최종 정확 보정**으로 끈 점을 포인터에 정확히 맞춥니다(제약은 다음 프레임에 다시 수렴).
-- 놓을 때는 끈 입력 재핀 후 `polishSession`이 **stage 0부터 전체 단계를 다시 수렴**시킵니다(초기 weight). 드래그 프레임의 1e8 소프트 해가 하드 제약으로 정리되며, 측정상 드롭 위치 이동은 0.2px 수준입니다.
+- 놓을 때는 `polishSession`이 **현재 단계만 80ms 예산으로** 다시 수렴하고, 끈 입력을 드롭 위치로 되돌립니다. stage 0부터 전체를 다시 풀면 다른 객체가 크게 움직여 점프가 생기기 때문입니다. 그래프 예제 측정에서 릴리스 순간 최대 이동은 0.64px입니다. 투영 핸들은 마지막에 포인터 위치로 다시 보정합니다.
 - 놓을 때 0스텝 재핀 → `varyingValues` 한 트랜잭션 커밋 → Undo 1회로 원복.
 - 취소(Esc·blur·pointercancel)는 저장된 입력으로 레이아웃만 되돌립니다.
 

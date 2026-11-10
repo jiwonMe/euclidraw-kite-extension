@@ -56,7 +56,7 @@ async function handle(request: EngineRequest) {
       }
       case 'polish': {
         const session = requireSession(request.key);
-        reply({ id: request.id, ok: true, layout: polishSession(session, request.maxSteps) });
+        reply({ id: request.id, ok: true, layout: polishSession(session, request.options) });
         return;
       }
       case 'resample': {

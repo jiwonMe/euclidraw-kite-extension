@@ -8,7 +8,7 @@ export type EngineRequest =
   | { readonly id: number; readonly type: 'point-drag'; readonly key: string; readonly handleId: string; readonly target: { readonly x: number; readonly y: number }; readonly steps: number; readonly budgetMs?: number }
   | { readonly id: number; readonly type: 'converge'; readonly key: string; readonly maxSteps?: number }
   | { readonly id: number; readonly type: 'resample'; readonly key: string }
-  | { readonly id: number; readonly type: 'polish'; readonly key: string; readonly maxSteps?: number }
+  | { readonly id: number; readonly type: 'polish'; readonly key: string; readonly options?: { maxSteps?: number; budgetMs?: number; pins?: readonly { index: number; value: number }[] } }
   | { readonly id: number; readonly type: 'dispose'; readonly key: string };
 
 export type EngineResponse =
@@ -23,7 +23,7 @@ export interface EngineClient {
   pointDrag(key: string, handleId: string, target: { x: number; y: number }, steps: number, budgetMs?: number): Promise<WireLayout>;
   converge(key: string, maxSteps?: number): Promise<WireCompiled>;
   resample(key: string): Promise<WireCompiled>;
-  polish(key: string, maxSteps?: number): Promise<WireLayout>;
+  polish(key: string, options?: { maxSteps?: number; budgetMs?: number; pins?: readonly { index: number; value: number }[] }): Promise<WireLayout>;
   dispose(key: string): Promise<void>;
   close(): void;
 }

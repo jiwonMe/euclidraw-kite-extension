@@ -226,8 +226,8 @@ export class PenroseRuntime {
   }
 
   /** End-of-drag full convergence from the current warm start. */
-  async polish(scopeId: EntityId, maxSteps?: number): Promise<WireLayout> {
-    const layout = await this.engine.polish(scopeId, maxSteps);
+  async polish(scopeId: EntityId, options?: { maxSteps?: number; budgetMs?: number; pins?: readonly { index: number; value: number }[] }): Promise<WireLayout> {
+    const layout = await this.engine.polish(scopeId, options);
     const entry = this.entries.get(scopeId);
     if (entry) {
       entry.layout = layout;
