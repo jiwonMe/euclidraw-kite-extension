@@ -18,7 +18,7 @@ const file = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 
 let coreReady: Promise<Any> | undefined;
 
-export async function load() {
+export async function load(factory?: () => Any) {
   const kernel: Any = await import('@alid/kernel');
   const repo: Any = await import('alid-host:repository-plugins');
   const bounds: Any = await import('alid-host:effective-bounds');
@@ -27,7 +27,7 @@ export async function load() {
   coreReady ??= core.default({ module_or_path: readFileSync(__ALID_CORE_WASM__) });
   await coreReady;
   // Node has no Web Worker: run the same engine code in-process.
-  (globalThis as Any).__PENROSE_ENGINE_FACTORY__ = () => createInlineEngine();
+  (globalThis as Any).__PENROSE_ENGINE_FACTORY__ = factory ?? (() => createInlineEngine());
   const plugin: Any = (await import('../../dist/plugin.js' as string)).default;
   const manifest = JSON.parse(file('alid.extension.json'));
   return { kernel, repo, bounds, clipboard, core, plugin, manifest, source: file('dist/plugin.js') };
@@ -54,8 +54,8 @@ export interface Host {
   dispose(): void;
 }
 
-export async function startHost(options: { clipboard?: boolean; minibuffer?: boolean; vectorPath?: boolean; markdown?: boolean; clientOffset?: { x: number; y: number } } = {}): Promise<Host> {
-  const { kernel, repo, bounds, clipboard, core, plugin, manifest } = await load();
+export async function startHost(options: { clipboard?: boolean; minibuffer?: boolean; vectorPath?: boolean; markdown?: boolean; clientOffset?: { x: number; y: number }; engineFactory?: () => Any } = {}): Promise<Host> {
+  const { kernel, repo, bounds, clipboard, core, plugin, manifest } = await load(options.engineFactory);
   const wasm = new core.WasmCanvasCore();
   let commits = 0, groups = 0;
   const world = new kernel.CanvasWorld({

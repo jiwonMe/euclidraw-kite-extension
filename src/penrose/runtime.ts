@@ -13,6 +13,11 @@ interface Entry {
   error?: string;
   diagnostics?: readonly WireDiagnostic[];
   pins: readonly PenrosePin[];
+  startedAt: number;
+  attempts: number;
+  /** Transport failures retry; a DSL error does not. */
+  retryable: boolean;
+  timer?: ReturnType<typeof setTimeout>;
 }
 
 const invalidate = (world: CanvasWorld) => {
@@ -36,6 +41,8 @@ export class PenroseRuntime {
   private readonly syncing = new Set<EntityId>();
   /** True while a pointer drag previews values that are not canonical. */
   dragging = false;
+  /** Host repaint hook (surface.requestRender); invalidate alone may not draw. */
+  onUpdate: (() => void) | undefined;
 
   constructor(private readonly world: CanvasWorld, engine?: EngineClient) {
     this.engine = engine ?? createEngineClient();
@@ -50,9 +57,15 @@ export class PenroseRuntime {
     const digest = this.digest(scope);
     let entry = this.entries.get(scopeId);
     if (!entry || entry.digest !== digest) {
-      entry = { digest, status: 'idle', pins: [] };
+      entry = { digest, status: 'idle', pins: [], startedAt: 0, attempts: 0, retryable: false };
       this.entries.set(scopeId, entry);
     }
+    // Recover from a worker that never answered (reload races, transient CSP).
+    if (entry.status === 'loading' && performance.now() - entry.startedAt > 10_000) {
+      entry.status = 'idle';
+      entry.retryable = true;
+    }
+    if (entry.status === 'error' && entry.retryable && entry.attempts < 2) entry.status = 'idle';
     if (entry.status === 'idle' && scope.topologyDigest !== '') this.start(scopeId, scope, entry);
     return entry;
   }
@@ -62,6 +75,12 @@ export class PenroseRuntime {
     const config = readSolverConfig(scope.solverConfig);
     const cold = scope.topologyDigest === digest && scope.varyingValues.length > 0;
     entry.status = 'loading';
+    entry.startedAt = performance.now();
+    entry.attempts++;
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+      if (entry.digest === digest && entry.status === 'loading') this.fail(entry, digest, new Error('컴파일 시간 초과'));
+    }, 8_000);
     const input: CompileInput = {
       digest,
       domain: scope.domainDsl,
@@ -71,26 +90,44 @@ export class PenroseRuntime {
       ...(cold ? { seeds: scope.varyingValues } : {}),
       maxSteps: config.maxSteps,
     };
-    void this.engine
-      .compile(scopeId, input)
-      .then(compiled => {
-        if (entry.digest !== digest) return undefined;
-        entry.compiled = compiled;
-        return this.engine.layout(scopeId).then(layout => {
-          if (entry.digest !== digest) return;
-          entry.layout = layout;
-          entry.status = 'ready';
-          invalidate(this.world);
-        });
-      })
-      .catch((error: unknown) => {
-        if (entry.digest !== digest) return;
-        const details = error as { message?: string; diagnostics?: readonly WireDiagnostic[]; penroseDiagnostics?: readonly WireDiagnostic[] };
-        entry.status = 'error';
-        entry.error = details.message ?? String(error);
-        entry.diagnostics = details.diagnostics ?? details.penroseDiagnostics;
-        invalidate(this.world);
-      });
+    try {
+      void this.engine
+        .compile(scopeId, input)
+        .then(compiled => {
+          if (entry.digest !== digest) return undefined;
+          entry.compiled = compiled;
+          return this.engine.layout(scopeId).then(layout => {
+            if (entry.digest !== digest) return;
+            entry.layout = layout;
+            entry.status = 'ready';
+            entry.retryable = false;
+            entry.attempts = 0;
+            if (entry.timer) { clearTimeout(entry.timer); entry.timer = undefined; }
+            this.notify();
+          });
+        })
+        .catch((error: unknown) => this.fail(entry, digest, error));
+    } catch (error) {
+      // A synchronous throw (e.g. the Worker cannot be created yet) used to
+      // leave the entry in 'loading' forever, so the scope showed "compiling".
+      this.fail(entry, digest, error);
+    }
+  }
+
+  private fail(entry: Entry, digest: string, error: unknown): void {
+    if (entry.digest !== digest) return;
+    if (entry.timer) { clearTimeout(entry.timer); entry.timer = undefined; }
+    const details = error as { message?: string; diagnostics?: readonly WireDiagnostic[]; penroseDiagnostics?: readonly WireDiagnostic[] };
+    entry.status = 'error';
+    entry.error = details.message ?? String(error);
+    entry.diagnostics = details.diagnostics ?? details.penroseDiagnostics;
+    entry.retryable = !(entry.diagnostics && entry.diagnostics.length);
+    this.notify();
+  }
+
+  private notify(): void {
+    invalidate(this.world);
+    try { this.onUpdate?.(); } catch { /* host render hook must not break the worker path */ }
   }
 
   compiled(scopeId: EntityId, scope: PenroseScopeAspect): WireCompiled | undefined {
@@ -120,7 +157,7 @@ export class PenroseRuntime {
         if (entry.digest !== digest) return;
         entry.layout = layout;
         if (entry.compiled) entry.compiled = { ...entry.compiled, varyingValues: layout.varyingValues };
-        invalidate(this.world);
+        this.notify();
       })
       .catch(() => undefined)
       .finally(() => this.syncing.delete(scopeId));
@@ -148,7 +185,7 @@ export class PenroseRuntime {
     if (targets.length) {
       layout = await this.engine.drag(scopeId, targets, 0);
     }
-    this.entries.set(scopeId, { digest, status: 'ready', compiled: { ...compiled, varyingValues: layout.varyingValues }, layout, pins });
+    this.entries.set(scopeId, { digest, status: 'ready', compiled: { ...compiled, varyingValues: layout.varyingValues }, layout, pins, startedAt: 0, attempts: 0, retryable: false });
     return { compiled, layout };
   }
 
@@ -173,7 +210,7 @@ export class PenroseRuntime {
     let layout = await this.engine.layout(scopeId);
     if (targets.length) layout = await this.engine.drag(scopeId, targets, 0);
     const result = { ...compiled, varyingValues: layout.varyingValues };
-    this.entries.set(scopeId, { digest, status: 'ready', compiled: result, layout, pins });
+    this.entries.set(scopeId, { digest, status: 'ready', compiled: result, layout, pins, startedAt: 0, attempts: 0, retryable: false });
     return result;
   }
 
@@ -184,7 +221,7 @@ export class PenroseRuntime {
     let layout = await this.engine.layout(scopeId);
     if (targets.length) layout = await this.engine.drag(scopeId, targets, 0);
     const result = { ...compiled, varyingValues: layout.varyingValues };
-    this.entries.set(scopeId, { digest, status: 'ready', compiled: result, layout, pins });
+    this.entries.set(scopeId, { digest, status: 'ready', compiled: result, layout, pins, startedAt: 0, attempts: 0, retryable: false });
     return result;
   }
 

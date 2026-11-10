@@ -47,7 +47,8 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 메시지: `compile`, `layout`, `drag`, `converge`, `resample`, `dispose`.
 - 세션은 스코프 ID로 유지되며 `State`(함수 포함)는 워커를 떠나지 않습니다.
 - 응답은 요청 ID로 짝지어지고, 낡은 컴파일 결과는 digest 비교로 버립니다.
-- 엔진 결과가 도착하면 메인은 `invalidateComputed()`로 Computed를 다시 평가합니다. 이 호출은 현재 커널에서 모든 셀을 무효화하므로 비용은 전역입니다(P0에서 측정).
+- 엔진 결과가 도착하면 메인은 `invalidateComputed()`와 `surface.requestRender()`로 Computed와 화면을 함께 갱신합니다. 전자는 현재 커널에서 모든 셀을 무효화하므로 비용은 전역입니다(P0에서 측정).
+- 새로고침 직후처럼 워커가 첫 요청을 처리하지 못하는 경우를 위해 compile은 동기 예외·전송 실패를 재시도(최대 2회)하고, 8초 동안 응답이 없으면 타임아웃으로 표시합니다. 성공·실패 모두 `requestRender`를 호출하므로 다른 정본 쓰기(복제 등) 없이 스스로 복구됩니다.
 - Node 테스트에는 Web Worker가 없으므로 `globalThis.__PENROSE_ENGINE_FACTORY__`로 인라인 엔진을 주입합니다.
 
 ## 4. 라벨과 결정성

@@ -3,7 +3,7 @@ import { ASPECT_IDS, COMMANDS, COMPUTED, EXTENSION_SUMMARY, EXTENSION_VERSION, P
 import { memberSpec, scopeSpec } from './penrose/aspects.ts';
 import { createComputedSpecs, type CompiledScope, type SolvedLayout } from './penrose/computed.ts';
 import { createCommands } from './penrose/commands.ts';
-import { insertScope, type PenroseHost } from './penrose/documents.ts';
+import { insertScope, surfaceOf, type PenroseHost } from './penrose/documents.ts';
 import { PenroseManipulator } from './penrose/manipulate.ts';
 import { createDiagnosticsPanel, createTriEditorPanel } from './penrose/panels.ts';
 import { PenroseRuntime } from './penrose/runtime.ts';
@@ -57,6 +57,7 @@ const spec = {
     let active = true;
     const disposers: (() => void)[] = [];
     const runtime = new PenroseRuntime(context.world);
+    runtime.onUpdate = () => surfaceOf(context)?.host.requestRender?.();
     const host: PenroseHost = { context, runtime };
 
     const register = <T>(computedSpec: ComputedAspectSpec<T>) => {
