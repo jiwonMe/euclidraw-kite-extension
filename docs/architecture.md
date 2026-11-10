@@ -103,7 +103,17 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 - 놓을 때 0스텝 재핀 → `varyingValues` 한 트랜잭션 커밋 → Undo 1회로 원복.
 - 취소(Esc·blur·pointercancel)는 저장된 입력으로 레이아웃만 되돌립니다.
 
-## 8. 패널
+## 8. 워크스페이스 도구 (에이전트)
+
+`workspace.tools`는 호스트 서비스입니다. 콜백은 **읽기와 변경 계획 준비**만 하고 문서를 직접 쓰지 않습니다(`docs/workspace-tools.md`). 생성도 `prepareChange(operations)`로 계획해야 하며, 호스트가 승인 카드에서 적용합니다.
+
+- `penrose.studio:create-scope` — 새 `penrose.scope`(+ `penrose.member`, `core.transform`, `core.bounds`, `core.stacking`)를 만드는 계획을 반환합니다. `x`/`y`는 스코프 **중심**이고 생략하면 뷰포트 중앙입니다. `width`/`height`는 60~2400으로 클램프합니다. 생성 시 기본 예제를 한 번 컴파일해 `topologyDigest`와 수렴 입력을 채우므로, 만든 직후 "미적용" 상태로 보이지 않습니다. 컴파일은 엔진 캐시만 채우고 문서는 건드리지 않습니다.
+- `penrose.studio:list-scopes` — 스코프의 `id`, 상자, trio 적용 여부, owner 수, 핀 수를 돌려줍니다.
+- 디스크립터: `penrose.scope`, `penrose.member`. 호스트가 `aspectIds`를 노출하지 않으면 디스크립터만 건너뛰고 생성 도구는 유지합니다.
+
+이 도구가 없으면 에이전트는 `changes_propose`로 **기존** 엔티티의 필드만 바꿀 수 있어 새 스코프를 추가할 수 없습니다.
+
+## 9. 패널
 
 - `penrose.panel.tri-editor`와 `penrose.panel.diagnostics`는 `navigation.group = document`로 활동 레일에 노출됩니다.
 - 호스트는 패널 열기를 `ui.shell`로 자기 UI에만 제공하고, 이 서비스는 확장 컨텍스트에서 `PhantomDependency`로 막힙니다. 따라서 확장 명령은 열기를 시도한 뒤 실패하면 레일 위치를 안내합니다.

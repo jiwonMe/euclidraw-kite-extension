@@ -164,6 +164,45 @@ export interface ServiceLookup {
   provide?<T>(id: string, value: T): () => void;
 }
 
+// ── workspace.tools (packages/kernel/src/workspace-tools.ts) ────────────────
+// Read-only discovery plus change *plans*: callbacks never mutate the document,
+// they return an approval proposal that the host applies.
+
+export interface EntityDescriptor {
+  readonly aspect: string;
+  readonly description: string;
+  readonly fields: Readonly<Record<string, string>>;
+}
+
+export interface WorkspaceTool {
+  readonly id: string;
+  readonly description: string;
+  readonly inputSchema: {
+    readonly type: 'object';
+    readonly properties: Readonly<Record<string, { readonly type: 'string' | 'number' | 'boolean' }>>;
+    readonly required?: readonly string[];
+  };
+  readonly execute: (input: Readonly<Record<string, unknown>>, context: { readonly signal: AbortSignal }) => Promise<unknown>;
+}
+
+export interface WorkspaceChangeSet {
+  readonly id: string;
+  readonly documentId: string;
+  readonly expected: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  readonly operations: readonly CanonicalPatchOp[];
+}
+
+export interface WorkspaceToolAccess {
+  search(query: string): readonly { id: string; description: string; owner: string }[];
+  describe(id: string): Omit<WorkspaceTool, 'execute'> | undefined;
+  descriptors(): readonly (EntityDescriptor & { owner: string })[];
+  invoke(id: string, input: unknown, signal: AbortSignal): Promise<unknown>;
+  register(tool: WorkspaceTool): () => void;
+  registerDescriptor(descriptor: EntityDescriptor): () => void;
+  prepareChange(operations: readonly CanonicalPatchOp[]): { changeProposalId: string; operations: readonly CanonicalPatchOp[] };
+  getChangeProposal(id: string): WorkspaceChangeSet;
+}
+
 export interface ActivationContext {
   readonly world: CanvasWorld;
   readonly services: ServiceLookup;

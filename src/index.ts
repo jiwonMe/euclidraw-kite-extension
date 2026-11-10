@@ -1,4 +1,4 @@
-import type { ActivationContext, ComputedAspectSpec, EntityId, UiControl } from './host.ts';
+import type { ActivationContext, ComputedAspectSpec, EntityId, UiControl, WorkspaceToolAccess } from './host.ts';
 import { ASPECT_IDS, COMMANDS, COMPUTED, EXTENSION_SUMMARY, EXTENSION_VERSION, PANELS, createPackageManifest } from './manifest.ts';
 import { memberSpec, scopeSpec } from './penrose/aspects.ts';
 import { createComputedSpecs, type CompiledScope, type SolvedLayout } from './penrose/computed.ts';
@@ -6,6 +6,7 @@ import { createCommands } from './penrose/commands.ts';
 import { insertScope, surfaceOf, type PenroseHost } from './penrose/documents.ts';
 import { PenroseManipulator } from './penrose/manipulate.ts';
 import { createDiagnosticsPanel, createTriEditorPanel } from './penrose/panels.ts';
+import { registerPenroseTools } from './penrose/tools.ts';
 import { PenroseRuntime } from './penrose/runtime.ts';
 import { PENROSE_CORE_VERSION } from './penrose/schema.ts';
 
@@ -69,6 +70,10 @@ const spec = {
     register(computed.layout);
 
     for (const command of createCommands(host)) disposers.push(context.commands.register(command));
+    // Canvas-agent discovery: without a registered create tool the agent can
+    // only edit existing entities, never add a new Penrose scope.
+    const tools = context.services.get<WorkspaceToolAccess>('workspace.tools');
+    if (tools) for (const off of registerPenroseTools(tools, host)) disposers.push(off);
     const manipulator = new PenroseManipulator(host);
     disposers.push(() => manipulator.dispose());
 

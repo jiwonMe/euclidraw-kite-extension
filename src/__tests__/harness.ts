@@ -51,6 +51,8 @@ export interface Host {
   run<T = unknown>(command: string, args?: unknown): Promise<T>;
   api(): Any;
   jsonl(): string;
+  tools: Any;
+  changes: Any;
   dispose(): void;
 }
 
@@ -106,6 +108,19 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
     deleteEntities(caller: string, ids: string[]) { run(caller, ids.map(id => ({ id, aspect: 'core.transform', patch: null }))); },
     beginExclusiveCommand() {},
   });
+  // Real workspace.tools + workspace.changes wiring (playground runtime.ts does
+  // the same): tool callbacks may only prepare plans, the host applies them.
+  const documentAbort = new AbortController();
+  const changes = new kernel.createWorkspaceChanges(
+    world,
+    (caller: string, ops: Any[]) => run(caller, ops),
+    () => ({ documentId: 'doc_test', viewId: 'view_test', signal: documentAbort.signal }),
+  );
+  services.provide('workspace.changes', { getContext: changes.getContext, apply: changes.apply, preview: changes.preview });
+  const workspaceTools = new kernel.WorkspaceToolRegistry(changes);
+  services.provide('workspace.tools', workspaceTools);
+  // A consumer-scoped access the tests use the way the agent does.
+  const toolsAccess = workspaceTools.forExtension('test.agent', ['penrose.scope', 'penrose.member'], () => {}, () => true);
   const completions: { prompt: string; labels: string[] }[] = [];
   const minibufferApi = {
     async completingRead(request: Any) {
@@ -129,6 +144,7 @@ export async function startHost(options: { clipboard?: boolean; minibuffer?: boo
   registry.registerPackages(packages);
   const h: Host = {
     kernel, world, wasm, compiler, commands, services, registry, plugin, manifest, workbench, history,
+    tools: toolsAccess, changes,
     undo: () => sync(wasm.undo()), redo: () => sync(wasm.redo()),
     commits: () => commits, groups: () => groups,
     paint: () => { world.flushComputedFrontier(); for (const paint of painters) paint(); world.flushComputedFrontier(); },
