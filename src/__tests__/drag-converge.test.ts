@@ -44,7 +44,7 @@ suite('per-frame drag convergence', () => {
       styleDsl: fixture('distance.style'),
     });
     await settle(host);
-    expect(Math.abs(distance(host, scopeId) - 100)).toBeLessThan(2);
+    expect(Math.abs(distance(host, scopeId) - 100)).toBeLessThan(1);
 
     host.select([scopeId]);
     host.paint();
@@ -54,7 +54,7 @@ suite('per-frame drag convergence', () => {
       host.pointer('pointermove', handle.x + step * 8, handle.y);
       await new Promise(resolve => setTimeout(resolve, 60));
       host.paint();
-      expect(Math.abs(distance(host!, scopeId) - 100), `frame ${step}`).toBeLessThan(2);
+      expect(Math.abs(distance(host!, scopeId) - 100), `frame ${step}`).toBeLessThan(1);
     }
     // Release: a full re-convergence hardens the softened drag state.
     const beforeEnergy = layout(host, scopeId).energy;
@@ -64,7 +64,7 @@ suite('per-frame drag convergence', () => {
     host.paint();
     const afterEnergy = layout(host, scopeId).energy;
     expect(afterEnergy).toBeLessThan(beforeEnergy);
-    expect(Math.abs(distance(host, scopeId) - 100)).toBeLessThan(2);
+    expect(Math.abs(distance(host, scopeId) - 100)).toBeLessThan(1);
     const afterDrop = centre(host, scopeId, 'a');
     // Polish must not visibly snap the dropped object away from the pointer.
     expect(Math.hypot(afterDrop.x - beforeDrop.x, afterDrop.y - beforeDrop.y)).toBeLessThan(2);

@@ -725,10 +725,10 @@ export function dragPointSession(
  * every frame after the first would skip convergence.
  */
 function settleForDrag(state: PenroseState, steps: number, budgetMs = 0): PenroseState {
-  // Very high EP weights make L-BFGS' preconditioned convergence check stall
-  // before it takes a step (labels then look frozen). A moderate weight still
-  // pulls constraints while keeping the optimizer moving.
-  const DRAG_WEIGHT = 1e5;
+  // 1e8 is the highest weight where L-BFGS still takes steps for label
+  // objectives; at the final EP weight (1e9) the preconditioned convergence
+  // check stops immediately and AutoLabel freezes during the drag.
+  const DRAG_WEIGHT = 1e8;
   const params = {
     ...start(state.varyingValues.length),
     weight: Math.min(state.params.weight, DRAG_WEIGHT),
@@ -763,7 +763,7 @@ export function dragSession(
   // Alternate converge and re-pin: pinning after a converged step leaves the
   // rest of the diagram at the pre-pin solution, so run a second round inside
   // the same frame budget.
-  const rounds = budgetMs > 0 ? 2 : 1;
+  const rounds = budgetMs > 0 ? 3 : 1;
   for (let round = 0; round < rounds; round++) {
     const remaining = budgetMs > 0 ? Math.max(1, deadline - performance.now()) : 0;
     state = settleForDrag(state, steps, remaining);
