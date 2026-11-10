@@ -13,7 +13,7 @@ alid(EucliDraw) 캔버스에서 **Penrose** 도해를 그리고, 자유도가 �
 2. 설치기는 `alid.extension.json`의 `sha256`으로 `dist/plugin.js`(약 3.1 MiB)를 검증합니다.
 3. 선택 의존성: `core.select-suite`, `core.clipboard`, `vector.pen-suite`. 없으면 해당 기능만 꺼집니다(베이킹은 `vector.path`가 필요).
 
-개발 중에는 `pnpm dev`로 감시 빌드 서버(`http://127.0.0.1:5174`)를 띄우고 alid의 "개발 중인 확장 연결"에 주소를 넣습니다.
+개발 중에는 `pnpm dev`로 감시 빌드 서버(`http://127.0.0.1:5174`)를 띄우고 alid의 "개발 중인 확장 연결"에 주소를 넣습니다. 워커 소스(`src/penrose/engine`, `labels.ts`, `wire.ts`, `schema.ts`)를 고치면 워커를 자동 재빌드합니다.
 
 ## 사용법
 

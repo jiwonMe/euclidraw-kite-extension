@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import { execFileSync } from 'node:child_process';
+import { watch } from 'node:fs';
 import { createInstallManifest, readConfig, root } from './install-manifest.mjs';
 
 const DEFAULT_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];
@@ -59,8 +60,21 @@ export async function startDevServer({ port = 5174, host = '127.0.0.1', origins 
   let revision = 0;
   // Dev output is separate and gitignored, so the committed release dist/ never changes while you work.
   const outDir = new URL(`.alid-dev/${port || 'auto'}-${process.pid}/`, root);
-  // The engine worker is inlined into the bundle; rebuild it once before watching.
-  execFileSync(process.execPath, ['scripts/build-worker.mjs'], { stdio: 'inherit' });
+  // The engine worker is inlined into the bundle. Rebuild it on engine changes;
+  // the generated file then triggers the main Vite rebuild by itself.
+  const buildWorker = () => {
+    try { execFileSync(process.execPath, ['scripts/build-worker.mjs'], { stdio: 'inherit' }); }
+    catch (error) { log(`✗ worker build failed: ${String(error?.message ?? error)}`); }
+  };
+  buildWorker();
+  let workerTimer;
+  const workerWatcher = watch(new URL('src/penrose', root), { recursive: true }, (_event, file) => {
+    const name = String(file ?? '');
+    if (!name || name.includes('generated')) return;
+    if (!/(engine[\\/]|labels\.ts$|wire\.ts$|schema\.ts$|digest\.ts$)/.test(name)) return;
+    clearTimeout(workerTimer);
+    workerTimer = setTimeout(buildWorker, 150);
+  });
   const watcher = await build({ logLevel: 'warn', root: fileURLToPath(root), configFile: fileURLToPath(new URL('vite.config.ts', root)), build: { outDir: fileURLToPath(outDir), emptyOutDir: true, watch: {} } });
   watcher.on('event', async event => {
     if (event.code === 'START') { building = true; broadcast('building', {}); }
@@ -88,7 +102,7 @@ export async function startDevServer({ port = 5174, host = '127.0.0.1', origins 
     url,
     close: async () => {
       clearInterval(heartbeat); for (const client of clients) client.end();
-      await watcher.close(); await new Promise(resolve => server.close(resolve));
+      await watcher.close(); workerWatcher.close(); clearTimeout(workerTimer); await new Promise(resolve => server.close(resolve));
       await rm(outDir, { recursive: true, force: true });
     },
   };
