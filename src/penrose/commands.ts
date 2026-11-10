@@ -110,14 +110,20 @@ export function createCommands(host: PenroseHost): CommandSpec[] {
     {
       id: COMMANDS.reproject,
       title: '다시 수렴',
-      summary: '현재 입력에서 최적화를 다시 돌립니다.',
-      run: async () => reprojectScope(host, requireScope(host)),
+      summary: '저장된 입력에서 최적화를 다시 돌립니다.',
+      run: async (params) => {
+        const args = (params ?? {}) as { scopeId?: string };
+        return reprojectScope(host, requireScope(host, args.scopeId));
+      },
     },
     {
       id: COMMANDS.resample,
       title: '변이 재표본',
       summary: 'variation 시드를 올려 초기 배치를 다시 뽑습니다.',
-      run: async () => resampleScope(host, requireScope(host)),
+      run: async (params) => {
+        const args = (params ?? {}) as { scopeId?: string };
+        return resampleScope(host, requireScope(host, args.scopeId));
+      },
     },
     {
       id: COMMANDS.pin,

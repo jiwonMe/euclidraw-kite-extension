@@ -136,16 +136,29 @@ export function createDiagnosticsPanel(): WorkbenchPanelSpec {
       const resample = el('button', 'padding:2px 8px;font:inherit;cursor:pointer', '재표본');
       const reproject = el('button', 'padding:2px 8px;font:inherit;cursor:pointer', '다시 수렴');
       actions.append(resample, reproject);
+      const status = el('div', 'min-height:18px;margin-bottom:6px;color:#64748b');
       const body = el('div', 'white-space:pre-wrap');
-      host.append(actions, body);
-      const runFor = (command: string) => async () => {
+      host.append(actions, status, body);
+      const runFor = (command: string, label: string) => async () => {
         const scopeId = scopeOf(context);
-        if (!scopeId) return;
-        try { await context.executeCommand(command as never, { scopeId } as never); }
-        catch (error) { body.textContent = error instanceof Error ? error.message : String(error); }
+        if (!scopeId) { status.textContent = '스코프를 선택하세요.'; return; }
+        resample.disabled = true; reproject.disabled = true;
+        status.textContent = `${label} 중…`;
+        try {
+          await context.executeCommand(command as never, { scopeId } as never);
+          const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
+          status.textContent = layout
+            ? `${label} 완료 · 에너지 ${layout.energy.toFixed(4)}`
+            : `${label} 완료`;
+          refresh();
+        } catch (error) {
+          status.textContent = error instanceof Error ? error.message : String(error);
+        } finally {
+          resample.disabled = false; reproject.disabled = false;
+        }
       };
-      resample.addEventListener('click', () => { void runFor(COMMANDS.resample)(); });
-      reproject.addEventListener('click', () => { void runFor(COMMANDS.reproject)(); });
+      resample.addEventListener('click', () => { void runFor(COMMANDS.resample, '재표본')(); });
+      reproject.addEventListener('click', () => { void runFor(COMMANDS.reproject, '다시 수렴')(); });
       const refresh = () => {
         const scopeId = scopeOf(context);
         if (!scopeId) { body.textContent = '스코프를 선택하세요.'; return; }

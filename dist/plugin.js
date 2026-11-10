@@ -1446,14 +1446,14 @@ function it(e) {
 		{
 			id: g.reproject,
 			title: "다시 수렴",
-			summary: "현재 입력에서 최적화를 다시 돌립니다.",
-			run: async () => Ye(e, q(e))
+			summary: "저장된 입력에서 최적화를 다시 돌립니다.",
+			run: async (t) => Ye(e, q(e, (t ?? {}).scopeId))
 		},
 		{
 			id: g.resample,
 			title: "변이 재표본",
 			summary: "variation 시드를 올려 초기 배치를 다시 뽑습니다.",
-			run: async () => Je(e, q(e))
+			run: async (t) => Je(e, q(e, (t ?? {}).scopeId))
 		},
 		{
 			id: g.pin,
@@ -1979,36 +1979,44 @@ function pt() {
 			e.setAttribute("style", `padding:8px;font:${J};min-width:280px;height:100%;box-sizing:border-box;overflow:auto`);
 			let n = Y("div", "display:flex;gap:6px;margin-bottom:8px"), r = Y("button", "padding:2px 8px;font:inherit;cursor:pointer", "재표본"), i = Y("button", "padding:2px 8px;font:inherit;cursor:pointer", "다시 수렴");
 			n.append(r, i);
-			let a = Y("div", "white-space:pre-wrap");
-			e.append(n, a);
-			let o = (e) => async () => {
-				let n = ut(t);
-				if (n) try {
-					await t.executeCommand(e, { scopeId: n });
-				} catch (e) {
-					a.textContent = e instanceof Error ? e.message : String(e);
+			let a = Y("div", "min-height:18px;margin-bottom:6px;color:#64748b"), o = Y("div", "white-space:pre-wrap");
+			e.append(n, a, o);
+			let s = (e, n) => async () => {
+				let o = ut(t);
+				if (!o) a.textContent = "스코프를 선택하세요.";
+				else {
+					r.disabled = !0, i.disabled = !0, a.textContent = `${n} 중…`;
+					try {
+						await t.executeCommand(e, { scopeId: o });
+						let r = t.world.getComputed(o, p.layout);
+						a.textContent = r ? `${n} 완료 · 에너지 ${r.energy.toFixed(4)}` : `${n} 완료`, c();
+					} catch (e) {
+						a.textContent = e instanceof Error ? e.message : String(e);
+					} finally {
+						r.disabled = !1, i.disabled = !1;
+					}
 				}
 			};
 			r.addEventListener("click", () => {
-				o(g.resample)();
+				s(g.resample, "재표본")();
 			}), i.addEventListener("click", () => {
-				o(g.reproject)();
+				s(g.reproject, "다시 수렴")();
 			});
-			let s = () => {
+			let c = () => {
 				let e = ut(t);
 				if (!e) {
-					a.textContent = "스코프를 선택하세요.";
+					o.textContent = "스코프를 선택하세요.";
 					return;
 				}
-				let n = X(t, e), r = t.world.getComputed(e, p.compiled), i = t.world.getComputed(e, p.layout), o = [];
-				if (o.push(`digest: ${n?.topologyDigest || "—"}`), o.push(`variation: ${n?.variation ?? "—"}`), r?.pending ? o.push("상태: 컴파일 중") : r && !r.ok ? o.push(`상태: 오류 — ${r.error ?? "DSL 오류"}`) : o.push("상태: 준비됨"), r) {
-					o.push(`owners: ${r.owners.length} · inputs: ${r.varyingValues.length}`), o.push(`translatable: ${r.interactivity.translatable.length} · scalable: ${r.interactivity.scalable.length}`);
-					for (let e of r.diagnostics.slice(0, 8)) o.push(`  ${e.source} L${e.line}: ${e.message}`);
+				let n = X(t, e), r = t.world.getComputed(e, p.compiled), i = t.world.getComputed(e, p.layout), a = [];
+				if (a.push(`digest: ${n?.topologyDigest || "—"}`), a.push(`variation: ${n?.variation ?? "—"}`), r?.pending ? a.push("상태: 컴파일 중") : r && !r.ok ? a.push(`상태: 오류 — ${r.error ?? "DSL 오류"}`) : a.push("상태: 준비됨"), r) {
+					a.push(`owners: ${r.owners.length} · inputs: ${r.varyingValues.length}`), a.push(`translatable: ${r.interactivity.translatable.length} · scalable: ${r.interactivity.scalable.length}`);
+					for (let e of r.diagnostics.slice(0, 8)) a.push(`  ${e.source} L${e.line}: ${e.message}`);
 				}
-				i && (o.push(`단계: ${i.stages} · 에너지: ${i.energy.toFixed(4)}`), o.push(`shapes: ${i.shapes.length}`), o.push(`pins: ${n?.pins.length ?? 0}`)), a.textContent = o.join("\n");
-			}, c = t.onSelectionChange(s), l = t.onWorldMutated(s);
-			return s(), () => {
-				c(), l();
+				i && (a.push(`단계: ${i.stages} · 에너지: ${i.energy.toFixed(4)}`), a.push(`shapes: ${i.shapes.length}`), a.push(`pins: ${n?.pins.length ?? 0}`)), o.textContent = a.join("\n");
+			}, l = t.onSelectionChange(c), u = t.onWorldMutated(c);
+			return c(), () => {
+				l(), u();
 			};
 		}
 	};
@@ -2236,19 +2244,29 @@ var _t = class {
 		};
 	}
 	async converge(e, t, n = []) {
-		let r = this.digest(t), i = await this.engine.converge(e, o(t.solverConfig).maxSteps), a = Q(n), s = await this.engine.layout(e);
-		a.length && (s = await this.engine.drag(e, a, 0));
-		let c = {
-			...i,
-			varyingValues: s.varyingValues
+		let r = this.digest(t), i = o(t.solverConfig), a = t.topologyDigest === r && t.varyingValues.length > 0;
+		await this.engine.compile(e, {
+			digest: r,
+			domain: t.domainDsl,
+			substance: t.substanceDsl,
+			style: t.styleDsl,
+			variation: t.variation || "0",
+			...a ? { seeds: t.varyingValues } : {},
+			maxSteps: i.maxSteps
+		});
+		let s = await this.engine.converge(e, i.maxSteps), c = Q(n), l = await this.engine.layout(e);
+		c.length && (l = await this.engine.drag(e, c, 0));
+		let u = {
+			...s,
+			varyingValues: l.varyingValues
 		};
 		return this.entries.set(e, {
 			digest: r,
 			status: "ready",
-			compiled: c,
-			layout: s,
+			compiled: u,
+			layout: l,
 			pins: n
-		}), c;
+		}), u;
 	}
 	async resample(e, t, n = []) {
 		let r = this.digest(t), i = await this.engine.resample(e), a = Q(n), o = await this.engine.layout(e);

@@ -152,10 +152,23 @@ export class PenroseRuntime {
     return { compiled, layout };
   }
 
-  /** Re-converge from the current inputs (reproject command). */
+  /** Re-converge from the stored inputs (reproject command). */
   async converge(scopeId: EntityId, scope: PenroseScopeAspect, pins: readonly PenrosePin[] = []): Promise<WireCompiled> {
     const digest = this.digest(scope);
-    const compiled = await this.engine.converge(scopeId, readSolverConfig(scope.solverConfig).maxSteps);
+    const config = readSolverConfig(scope.solverConfig);
+    // Start from the canonical inputs, not from whatever the worker cached:
+    // the button must work after reopening a document, undo, or a failed drag.
+    const cold = scope.topologyDigest === digest && scope.varyingValues.length > 0;
+    await this.engine.compile(scopeId, {
+      digest,
+      domain: scope.domainDsl,
+      substance: scope.substanceDsl,
+      style: scope.styleDsl,
+      variation: scope.variation || '0',
+      ...(cold ? { seeds: scope.varyingValues } : {}),
+      maxSteps: config.maxSteps,
+    });
+    const compiled = await this.engine.converge(scopeId, config.maxSteps);
     const targets = pinTargets(pins);
     let layout = await this.engine.layout(scopeId);
     if (targets.length) layout = await this.engine.drag(scopeId, targets, 0);
