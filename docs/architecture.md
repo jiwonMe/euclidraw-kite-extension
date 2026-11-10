@@ -73,7 +73,7 @@ computed.penrose.layout ─── Shape[] · owner bounds · MathJax SVG · 에�
 ## 6. 조작
 
 - 핸들은 **선택 범위 안에서만** 생깁니다: 선택한 스코프의 모든 자유 입력, 또는 선택한 멤버의 자유 입력. 판정은 `state.interactivityInfo`의 자유 입력 기준이며 core의 `isTranslatable`보다 넓습니다. 핀이 걸린 입력, 읽기 전용 스코프, 식으로 계산된 속성에는 없습니다.
-- 기즈모는 호스트 선택 핸들과 같은 7×7px 흰 사각형, `var(--alid-accent,#008FF0)` 테두리 1.25px로 HUD에 그립니다. 드래그 중인 핸들은 워커 응답을 기다리지 않고 포인터 목표값으로 즉시 이동하고, 나머지 핸들은 매 프레임 수렴 결과를 따라갑니다. `worldToScreen`은 클라이언트 좌표를 돌려주므로 HUD의 `getBoundingClientRect()` 원점을 빼서 HUD-로컬로 그립니다. 프레임은 매번 정본 `core.transform`/`core.bounds`에서 계산하고, 스코프 캔버스(±w/2, ±h/2) 밖 좌표는 그리지 않습니다. 문서 SVG에 포함되지 않으므로 내보내기에 새지 않습니다.
+- 기즈모는 호스트 선택 핸들과 같은 지름 8px 원(흰 채움), `var(--alid-accent,#008FF0)` 테두리 1.25px로 HUD에 그립니다. 드래그 중인 핸들은 워커 응답을 기다리지 않고 포인터 목표값으로 즉시 이동하고, 나머지 핸들은 매 프레임 수렴 결과를 따라갑니다. `worldToScreen`은 클라이언트 좌표를 돌려주므로 HUD의 `getBoundingClientRect()` 원점을 빼서 HUD-로컬로 그립니다. 프레임은 매번 정본 `core.transform`/`core.bounds`에서 계산하고, 스코프 캔버스(±w/2, ±h/2) 밖 좌표는 그리지 않습니다. 문서 SVG에 포함되지 않으므로 내보내기에 새지 않습니다.
 - 이동 핸들은 `center`/`start`/`end`/`points` 입력을, 크기 핸들은 `r`/`rx`/`ry`/`width`/`height`를 움직입니다.
 - 드래그 중에는 포인터 목표만 기록하고, 프레임마다 워커에 절대 입력값을 보냅니다.
 - 워커는 `stepTimes(dragSteps)` 후 끈 입력을 목표값으로 되돌립니다(재핀). 주변 도형은 근사 최적화 상태입니다.

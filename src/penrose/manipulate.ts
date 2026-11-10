@@ -201,9 +201,8 @@ export class PenroseManipulator {
     const off = registry.register({
       id: `penrose:${scopeId}:${kind}:${input.path}`,
       priority: HANDLE_PRIORITY,
-      shape: 'rect',
-      widthScreenPx: 12,
-      heightScreenPx: 12,
+      shape: 'circle',
+      radiusScreenPx: 6,
       getWorldPosition: out => {
         const frame = this.liveFrame(scopeId);
         const values = this.liveValues(scopeId);
@@ -280,9 +279,9 @@ export class PenroseManipulator {
       const y = round(screen.y - hudRect.top);
       const isActive = !!active && active.target.scopeId === paintable.scopeId
         && active.target.kind === paintable.kind && active.target.input.path === paintable.path;
-      // Match the host's selection handles: 7px white squares with accent stroke.
+      // Round handles in the host's selection palette.
       parts.push(
-        `<rect x="${round(x - 3.5)}" y="${round(y - 3.5)}" width="7" height="7" ` +
+        `<circle cx="${x}" cy="${y}" r="4" ` +
         `fill="${isActive ? 'var(--alid-accent,#008FF0)' : '#ffffff'}" stroke="var(--alid-accent,#008FF0)" ` +
         `stroke-width="1.25" data-kind="${paintable.kind}"/>`,
       );

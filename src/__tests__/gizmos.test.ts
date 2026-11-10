@@ -19,7 +19,7 @@ const center = (h: Host, memberId: string) => {
   const box = h.world.getComputed(memberId, 'computed.penrose.member');
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
-const dots = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] rect').length;
+const dots = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length;
 
 suite('selection-scoped gizmos', () => {
   it('shows nothing without a selection, everything for a scope, one for a member', async () => {
@@ -102,10 +102,10 @@ suite('selection-scoped gizmos', () => {
     host.select([scopeId]);
     host.paint();
     const handles = host.gizmoHandles();
-    const squares = [...host.hud.querySelectorAll('[data-role="penrose-gizmos"] rect')];
-    expect(squares.length).toBe(handles.length);
-    for (const square of squares) {
-      const x = Number(square.getAttribute('x')) + 3.5;
+    const circles = [...host.hud.querySelectorAll('[data-role="penrose-gizmos"] circle')];
+    expect(circles.length).toBe(handles.length);
+    for (const circle of circles) {
+      const x = Number(circle.getAttribute('cx'));
       expect(handles.some(handle => Math.abs(handle.x - x) < 0.6)).toBe(true);
     }
   });
@@ -120,9 +120,9 @@ suite('selection-scoped gizmos', () => {
     expect(host.press(handle.x, handle.y)).toBe(true);
     host.pointer('pointermove', handle.x + 40, handle.y + 20);
     host.paint();
-    const square = host.hud.querySelector('[data-role="penrose-gizmos"] rect')!;
-    const x = Number(square.getAttribute('x')) + 3.5;
-    const y = Number(square.getAttribute('y')) + 3.5;
+    const circle = host.hud.querySelector('[data-role="penrose-gizmos"] circle')!;
+    const x = Number(circle.getAttribute('cx'));
+    const y = Number(circle.getAttribute('cy'));
     expect(Math.abs(x - (handle.x + 40))).toBeLessThan(0.6);
     expect(Math.abs(y - (handle.y + 20))).toBeLessThan(0.6);
     host.pointer('pointerup', handle.x + 40, handle.y + 20);
