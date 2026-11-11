@@ -20,6 +20,7 @@ const center = (h: Host, memberId: string) => {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
 const dots = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] circle').length;
+const boxes = (h: Host) => h.hud.querySelectorAll('[data-role="penrose-gizmos"] rect').length;
 
 suite('selection-scoped gizmos', () => {
   it('shows nothing without a selection, everything for a scope, one for a member', async () => {
@@ -66,13 +67,41 @@ suite('selection-scoped gizmos', () => {
     const handles = host.gizmoHandles();
     // Seven vertices, each with a free dot centre and a free label centre.
     expect(handles.length).toBe(14);
-    expect(dots(host)).toBe(14);
+    expect(dots(host) + boxes(host)).toBe(14);
+    // Labels are outlined boxes; the dot carries a round grip.
+    expect(boxes(host)).toBe(7);
+    expect(dots(host)).toBe(7);
     for (const handle of handles) expect(host.hitTest(handle.x, handle.y)).toBe(true);
 
     host.select([bindings(host, scopeId).Chicago!]);
     host.paint();
     expect(host.gizmoHandles().length).toBe(2);
-    expect(dots(host)).toBe(2);
+    expect(dots(host) + boxes(host)).toBe(2);
+  });
+
+  it('uses a box gizmo for text and a round one for points', async () => {
+    host = await startHost();
+    const scopeId = await host.run<string>('penrose.studio:insert-scope');
+    await settle(host);
+    await host.run('penrose.studio:apply-dsl', {
+      scopeId,
+      domainDsl: fixture('graph.domain'),
+      substanceDsl: fixture('graph.substance'),
+      styleDsl: fixture('graph.style'),
+    });
+    await settle(host);
+    host.select([scopeId]);
+    host.paint();
+    const registry = (host.gizmos as { handles?: { id: string; shape: string; radiusScreenPx?: number; widthScreenPx?: number; heightScreenPx?: number }[] }).handles ?? [];
+    const text = registry.find(handle => handle.id.includes(':move:`Chicago`.text'));
+    const dot = registry.find(handle => handle.id.includes(':move:`Chicago`.dot'));
+    expect(text?.shape).toBe('rect');
+    expect(dot?.shape).toBe('circle');
+    // The box tracks the label extent: wider than tall, and padded.
+    expect(text!.widthScreenPx!).toBeGreaterThan(text!.heightScreenPx!);
+    expect(text!.widthScreenPx!).toBeGreaterThan(20);
+    // The HUD paints exactly one dashed outline for it.
+    expect(host.hud.querySelectorAll('[data-role="penrose-gizmos"] rect').length).toBe(7);
   });
 
   it('keeps handles aligned when the selected scope moves', async () => {

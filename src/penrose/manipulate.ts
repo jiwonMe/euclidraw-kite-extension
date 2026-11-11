@@ -44,6 +44,7 @@ interface Paintable {
   readonly path: string;
   readonly input?: WireInputs;
   readonly computedId?: string;
+  readonly form?: GizmoForm;
 }
 
 /** Every optimization input index of one style path, matching runtime order. */
@@ -72,6 +73,42 @@ function shapesFinite(shapes: readonly WireShape[]): boolean {
     if (shape.clip && !shapesFinite(shape.clip)) return false;
   }
   return true;
+}
+
+/** First shape with this name, including children and clip shapes. */
+function findShape(shapes: readonly WireShape[], name: string): WireShape | undefined {
+  for (const shape of shapes) {
+    if (shape.name === name) return shape;
+    const child = shape.children ? findShape(shape.children, name) : undefined;
+    if (child) return child;
+    const clipped = shape.clip ? findShape(shape.clip, name) : undefined;
+    if (clipped) return clipped;
+  }
+  return undefined;
+}
+
+/** Gizmos mirror the object they move: boxes for text/images, dots for points. */
+interface GizmoForm {
+  readonly kind: 'circle' | 'rect';
+  /** Canvas units; multiplied by frame scale × zoom for screen pixels. */
+  readonly width: number;
+  readonly height: number;
+  /** Screen pixels, fixed at build time so paint and hit-test agree. */
+  readonly screenWidth?: number;
+  readonly screenHeight?: number;
+}
+
+const RECT_TYPES = new Set(['Text', 'Equation', 'Image', 'Rectangle']);
+const RECT_MIN_CANVAS = 8;
+const RECT_PADDING_SCREEN = 8;
+
+function gizmoFormOf(shape: WireShape | undefined): GizmoForm {
+  if (shape && RECT_TYPES.has(shape.shapeType)) {
+    const width = typeof shape.props.width === 'number' ? shape.props.width : 0;
+    const height = typeof shape.props.height === 'number' ? shape.props.height : 0;
+    if (width >= RECT_MIN_CANVAS && height >= RECT_MIN_CANVAS) return { kind: 'rect', width, height };
+  }
+  return { kind: 'circle', width: 0, height: 0 };
 }
 
 /**
@@ -167,6 +204,7 @@ export class PenroseManipulator {
       const layout = context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout);
       const box = readScopeBox(this.previewView(), scopeId);
       if (!scope || !compiled || !layout || !box) continue;
+      const scale = frameFor(layout.canvas, box).scale;
       const pinned = new Set(scope.pins.map(pin => pin.index));
       const translatable = new Set(compiled.interactivity.translatable.map(input => input.path));
       const scalable = new Set(compiled.interactivity.scalable.map(input => input.path));
@@ -179,11 +217,11 @@ export class PenroseManipulator {
         // Pinned inputs are not free: no handle until the pin is released.
         if (indexesOf(input).some(index => pinned.has(index))) continue;
         if (translatable.has(input.path)) {
-          this.addHandle(scopeId, layout.canvas, input, 'move', layout.varyingValues, registry);
+          this.addHandle(scopeId, layout.canvas, layout.shapes, scale, input, 'move', layout.varyingValues, registry);
           const point = this.canvasPoint(input, layout.varyingValues);
           if (point) directPoints.push(point);
         }
-        if (scalable.has(input.path)) this.addHandle(scopeId, layout.canvas, input, 'scale', layout.varyingValues, registry);
+        if (scalable.has(input.path)) this.addHandle(scopeId, layout.canvas, layout.shapes, scale, input, 'scale', layout.varyingValues, registry);
       }
       // Projected points: not direct inputs, but movable through their free
       // inputs. The worker owns the Jacobian; the main thread only drags.
@@ -192,7 +230,7 @@ export class PenroseManipulator {
         // A direct input already has a handle at this point; a projected handle
         // stacked on top of it would only win hit-testing and behave worse.
         if (directPoints.some(point => Math.hypot(point.x - handle.x, point.y - handle.y) < 0.5)) continue;
-        this.addComputedHandle(scopeId, layout.canvas, handle, registry);
+        this.addComputedHandle(scopeId, layout.canvas, layout.shapes, scale, handle, registry);
       }
     }
     this.paintOverlay();
@@ -201,15 +239,19 @@ export class PenroseManipulator {
   private addComputedHandle(
     scopeId: EntityId,
     canvas: { readonly width: number; readonly height: number },
-    handle: { id: string; x: number; y: number; pivot?: { x: number; y: number } },
+    shapes: readonly WireShape[],
+    scale: number,
+    handle: { id: string; shape: string; x: number; y: number; pivot?: { x: number; y: number } },
     registry: CanvasToolSurface['selection']['gizmos'],
   ): void {
     const handleId = handle.id;
+    const form = this.screenForm(gizmoFormOf(findShape(shapes, handle.shape)), scale);
     const off = registry.register({
       id: `penrose:${scopeId}:computed:${handleId}`,
       priority: HANDLE_PRIORITY - 1,
-      shape: 'circle',
-      radiusScreenPx: 6,
+      ...(form.kind === 'rect'
+        ? { shape: 'rect' as const, widthScreenPx: form.screenWidth!, heightScreenPx: form.screenHeight! }
+        : { shape: 'circle' as const, radiusScreenPx: 6 }),
       getWorldPosition: out => {
         const frame = this.liveFrame(scopeId);
         const point = this.computedPoint(scopeId, handleId);
@@ -228,7 +270,7 @@ export class PenroseManipulator {
       },
     });
     this.disposeHandles.push(off);
-    this.paintables.push({ scopeId, canvas, kind: 'computed', path: handleId, computedId: handleId });
+    this.paintables.push({ scopeId, canvas, kind: 'computed', path: handleId, computedId: handleId, form });
     if (!handle.pivot) return;
     // Angular points get a second grip that rotates around the pivot instead of
     // translating: for a ray/arrow tip the underlying DOF is an angle.
@@ -291,6 +333,22 @@ export class PenroseManipulator {
     return this.host.context.world.getComputed<SolvedLayout>(scopeId, COMPUTED.layout)?.computed.find(entry => entry.id === handleId);
   }
 
+  /**
+   * Canvas extent → screen pixels for this scope. Sizes are frozen at build
+   * time so the dashed outline and the hit rectangle never disagree.
+   */
+  private screenForm(form: GizmoForm, scale: number): GizmoForm {
+    if (form.kind !== 'rect') return form;
+    const surface = this.surface ?? surfaceOf(this.host.context);
+    const zoom = surface?.host.getZoom?.() ?? 1;
+    const factor = (scale || 1) * (zoom || 1);
+    return {
+      ...form,
+      screenWidth: Math.max(16, form.width * factor + RECT_PADDING_SCREEN),
+      screenHeight: Math.max(16, form.height * factor + RECT_PADDING_SCREEN),
+    };
+  }
+
   /** Centre of a rotation grip: between the point and its pivot. */
   private rotateAnchor(handle: { x: number; y: number; pivot?: { x: number; y: number } }): { x: number; y: number } | undefined {
     if (!handle.pivot) return undefined;
@@ -316,17 +374,21 @@ export class PenroseManipulator {
   private addHandle(
     scopeId: EntityId,
     canvas: { readonly width: number; readonly height: number },
+    shapes: readonly WireShape[],
+    scale: number,
     input: WireInputs,
     kind: 'move' | 'scale',
     values: readonly number[],
     registry: CanvasToolSurface['selection']['gizmos'],
   ): void {
     if (!this.canvasPoint(input, values)) return;
+    const form = kind === 'move' ? this.screenForm(gizmoFormOf(findShape(shapes, input.path)), scale) : { kind: 'circle' as const, width: 0, height: 0 };
     const off = registry.register({
       id: `penrose:${scopeId}:${kind}:${input.path}`,
       priority: HANDLE_PRIORITY,
-      shape: 'circle',
-      radiusScreenPx: 6,
+      ...(form.kind === 'rect'
+        ? { shape: 'rect' as const, widthScreenPx: form.screenWidth!, heightScreenPx: form.screenHeight! }
+        : { shape: 'circle' as const, radiusScreenPx: 6 }),
       getWorldPosition: out => {
         const frame = this.liveFrame(scopeId);
         const values = this.liveValues(scopeId);
@@ -347,7 +409,7 @@ export class PenroseManipulator {
       },
     });
     this.disposeHandles.push(off);
-    this.paintables.push({ scopeId, canvas, kind, path: input.path, input });
+    this.paintables.push({ scopeId, canvas, kind, path: input.path, input, form });
   }
 
   /** World gizmos are painted in screen pixels into the host HUD, never the document. */
@@ -418,13 +480,24 @@ export class PenroseManipulator {
       const y = round(screen.y - hudRect.top);
       // Round handles in the host's selection palette. Rotation grips are an
       // open dashed ring so they read differently from the solid move dots.
-      parts.push(
-        paintable.kind === 'rotate'
-          ? `<circle cx="${x}" cy="${y}" r="4.5" fill="none" stroke="var(--alid-accent,#008FF0)" stroke-width="1.25" stroke-dasharray="2 2" data-kind="rotate"/>`
-          : `<circle cx="${x}" cy="${y}" r="4" ` +
-            `fill="${isActive ? 'var(--alid-accent,#008FF0)' : '#ffffff'}" stroke="var(--alid-accent,#008FF0)" ` +
-            `stroke-width="1.25" data-kind="${paintable.kind}"/>`,
-      );
+      if (paintable.kind === 'rotate') {
+        parts.push(`<circle cx="${x}" cy="${y}" r="4.5" fill="none" stroke="var(--alid-accent,#008FF0)" stroke-width="1.25" stroke-dasharray="2 2" data-kind="rotate"/>`);
+      } else if (paintable.form?.kind === 'rect' && paintable.form.screenWidth && paintable.form.screenHeight) {
+        // Boxes for text/images: the outline is the object's own extent, so the
+        // affordance reads as "this block moves", not "this point moves".
+        const w = round(paintable.form.screenWidth), h = round(paintable.form.screenHeight);
+        parts.push(
+          `<rect x="${round(x - w / 2)}" y="${round(y - h / 2)}" width="${w}" height="${h}" rx="2" ` +
+          `fill="${isActive ? 'rgba(0,143,240,0.10)' : 'none'}" stroke="var(--alid-accent,#008FF0)" ` +
+          `stroke-width="${isActive ? 1.5 : 1}" stroke-dasharray="3 2" data-kind="${paintable.kind}"/>`,
+        );
+      } else {
+        parts.push(
+          `<circle cx="${x}" cy="${y}" r="4" ` +
+          `fill="${isActive ? 'var(--alid-accent,#008FF0)' : '#ffffff'}" stroke="var(--alid-accent,#008FF0)" ` +
+          `stroke-width="1.25" data-kind="${paintable.kind}"/>`,
+        );
+      }
     }
     this.overlay.innerHTML = parts.join('');
   }
